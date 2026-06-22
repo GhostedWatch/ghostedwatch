@@ -1,0 +1,127 @@
+# GhostedWatch
+
+Reveddit-style browser extension for the .win sites
+(patriots.win / scored.co / communities.win — same backend, different aliases).
+It watches **your own** posts and comments and notifies you when one is removed or
+**shadow-removed**, and lets you see whether your content is being hidden from
+other users.
+
+## How it works
+
+Detection runs in the **background service worker**, so it keeps working with no
+.win tab open (like reveddit real-time). The content script's only jobs are to
+capture your session and paint in-page highlights — all polling/detection is in the
+background.
+
+- **Session capture (content script).** The site keeps per-user API tokens in
+  `localStorage`; sent as `X-Api-Key` / `X-Api-Secret` headers, they authenticate
+  independently of cookies. The content script reads them, resolves your username
+  (`user/about.json?user=me`), and hands `{user, origin, apiKey, apiSecret}` to the
+  background. It re-captures on every page load so the session stays fresh.
+- **Polling (background).** Using those tokens the background polls your own
+  **`content/profile.json`** (authenticated) — one call returns your recent posts
+  and comments with `is_removed` / `removal_source` flags. The service worker has
+  host permissions, so it makes these cross-origin calls itself, with no tab open.
+  On first run it pages through your whole history once (bounded to ~500 items,
+  ~0.8s between pages) to find existing removals — recorded **without** per-item
+  notifications, summarized as a single "found N removed" notice. After that,
+  ongoing checks fetch only the first page each minute (~1 request), since new
+  removals of recent items show up there. A `chrome.alarms` timer (with a watchdog)
+  drives the cycle.
+- **Confirm + notify.** Each observation is folded into stored state; after a couple
+  of consecutive confirmations a removal is recorded, a notification fires, and the
+  badge updates (each id notifies at most once, ever).
+- **Recovering your text.** A removed item's **list entry appears immediately** (its
+  permalink is built from the uuid — no lookup needed). The **text** fills in right
+  after:
+  - posts/comments you made while installed already have their text, captured from
+    the page's own `create_comment` / `create_post` traffic — shown instantly;
+  - for backlog removals the background recovers your own copy via the ordinary
+    `comment/thread?id=…` endpoint (authenticated with your tokens — the same call
+    the site uses to render any permalink, verified to return a removed comment's
+    content to its author). Until it arrives the popup shows a "loading…" indicator.
+
+**Public-view audit**: for each removed comment or post, the background also fetches
+the logged-out view (the same `comment/thread` / `post.json` endpoints, but
+*without* tokens) and compares it to your authored view. This (a) corroborates the
+removal independently of the `is_removed` flag, (b) corrects false positives — if
+the public still shows your content, the record is dropped — and (c) classifies the
+removal as a visible placeholder vs. *hidden from others entirely*.
+
+**Posts too**: the profile feed carries the same removal fields for your posts, so
+removed posts are detected, listed, notified and highlighted exactly like comments
+(a removed post shows you its title; the public sees it blanked). Highlighting marks
+the `post` block; comments mark the `comment` block.
+
+**In-thread highlighting (content script)**: on .win pages (threads *and* your user
+page, on both patriots.win and scored.co), the content script outlines any of your
+own posts/comments it knows are removed and adds a small attributed banner — an
+extension tag (click → options) and a removal-source pill ("community filter" /
+"moderator" / …, with a tooltip), plus a "hidden from others" pill when the audit
+found the public can't see it at all. A `MutationObserver` re-marks items loaded
+later (SPA navigation, "load more").
+
+The extension only ever reads your own session's normal endpoints and stores text
+you authored — **no undocumented content-recovery endpoint**. Default poll interval
+is 1 minute (one bulk request per check).
+
+See `src/background.ts` (service-worker orchestration), `src/src/poller.ts` (the
+detection cycle), `monitoring.ts` (removal transition logic + recording),
+`win-api.ts` (id↔uuid encoding, profile normalization, public-view classifier),
+`content.ts` / `inject.ts` (session + post capture, highlighting), and `storage.ts`.
+
+## Develop
+
+This project uses **Yarn 4** (vendored at `.yarn/releases/`), matching the
+reveddit website/extension. The supply-chain settings in `.yarnrc.yml` are
+intentional: `npmMinimalAgeGate: 7d` (refuse packages younger than 7 days),
+`enableScripts: false` (no dependency install scripts run), and
+`checksumBehavior: throw`. Dependency versions are pinned to releases at least 30
+days old.
+
+```bash
+yarn install         # respects the 7-day age gate, runs no install scripts
+yarn typecheck
+yarn test            # vitest: id<->uuid encoding, profile normalization, removal-detection
+                     #   threshold, notify-once orchestration, url parsing, public-view classifier
+yarn build-chrome    # -> dist-chrome/ and chrome.zip
+yarn build-firefox   # -> dist-firefox/ and firefox.zip  (manifest rewritten to MV2)
+yarn test:e2e        # Playwright: loads the real built extension in Chromium and
+                     #   checks the popup/options/history pages.
+                     #   First time: `yarn playwright install chromium`.
+yarn e2e:login       # one-time: opens Chromium with the extension + a persistent
+                     #   profile; log in by hand, press Enter to save the session.
+                     #   Then: WIN_E2E_LIVE=1 yarn test:e2e   (runs logged-in tests)
+
+```
+
+Load unpacked: Chrome → `chrome://extensions` → Developer mode → Load unpacked →
+`dist-chrome/`. Firefox → `about:debugging` → Load Temporary Add-on → any file in
+`dist-firefox/`.
+
+## Verified against live data (throwaway test account)
+
+- `removal_source: communityFilter` / `communityFilterPending` = automatic filter
+  removal; `moderator` / `nuke` = manual. The auto-filter targets certain slurs and
+  terms; new accounts (`is_new_user: true`) also get held.
+- A community-filtered comment is **present** in the anonymous thread with
+  `is_removed: true` and empty content (shown to others as "removed by community
+  filter") → classified `publicly_removed`.
+- Author content recovery: `comment/profile.json` blanks the content even for the
+  author, but **`comment/thread?id=…` (authenticated with your API tokens) returns
+  the author's `raw_content`** — this is what backlog recovery uses.
+
+## Known open items
+
+- Backlog recovery + polling fetch `${origin}/api/v2/...` from the background with
+  your `X-Api-Key` / `X-Api-Secret` tokens; verified against patriots.win — confirm
+  scored.co / communities.win serve `/api/v2` on their own origin under header-token
+  auth too (the service worker's host permissions cover all three).
+- Removal detection trusts `content/profile.json`'s `is_removed` flag, and also
+  treats a comment whose content the feed has blanked (once we'd seen its text) as
+  removed, so it survives the site dropping/renaming that flag. The per-item
+  public-view audit runs only on already-flagged removals (to confirm + classify),
+  not as a primary detector — if the feed ever stopped exposing removal state at
+  all, detection would need to fall back to auditing every tracked item.
+- Page-size params are ignored by the API (fixed 25/page); pagination uses the
+  verified `&post=N&comment=M` running-count cursor.

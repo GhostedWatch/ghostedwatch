@@ -1,0 +1,96 @@
+import { describe, it, expect } from 'vitest'
+import { computeStats, removalSourceLabel, toCSV, toJSON } from '../stats'
+import type { RemovedRecord } from '../storage'
+
+const rec = (over: Partial<RemovedRecord>): RemovedRecord => ({
+    id: 1,
+    uuid: 'u',
+    type: 'comment',
+    post_uuid: 'p',
+    community: 'TheDonald',
+    title: '',
+    text: '',
+    text_loading: false,
+    status: 'publicly_removed',
+    removal_source: 'communityFilter',
+    created: 0,
+    observed_utc: 1000,
+    unseen: true,
+    ...over,
+})
+
+describe('computeStats', () => {
+    it('counts totals, own/other, hidden, reapproved', () => {
+        const s = computeStats([
+            rec({ id: 1 }),
+            rec({ id: 2, source: 'other' }),
+            rec({ id: 3, hidden: true }),
+            rec({ id: 4, reapproved_utc: 5 }),
+        ])
+        expect(s.total).toBe(4)
+        expect(s.own).toBe(3) // no source = own
+        expect(s.other).toBe(1)
+        expect(s.hidden).toBe(1)
+        expect(s.reapproved).toBe(1)
+    })
+
+    it('tallies communities and sources, sorted desc', () => {
+        const s = computeStats([
+            rec({ id: 1, community: 'A', removal_source: 'moderator' }),
+            rec({ id: 2, community: 'A', removal_source: 'communityFilter' }),
+            rec({ id: 3, community: 'B', removal_source: 'communityFilter' }),
+        ])
+        expect(s.byCommunity[0]).toEqual({ name: 'A', count: 2 })
+        expect(s.bySource[0]).toEqual({ name: 'community filter', count: 2 })
+    })
+
+    it('median time-to-removal from created→observed (ignores unknown created)', () => {
+        const s = computeStats([
+            rec({ id: 1, created: 1000, observed_utc: 4000 }), // 3000
+            rec({ id: 2, created: 1000, observed_utc: 6000 }), // 5000
+            rec({ id: 3, created: 0, observed_utc: 9999 }), // ignored (no created)
+        ])
+        expect(s.medianTimeToRemovalMs).toBe(4000)
+    })
+
+    it('buckets removals into the last 14 days, zero-filled', () => {
+        const now = Date.UTC(2026, 5, 20, 12)
+        const s = computeStats(
+            [
+                rec({ id: 1, observed_utc: now }),
+                rec({ id: 2, observed_utc: now - 86400000 }),
+                rec({ id: 3, observed_utc: now - 86400000 }),
+            ],
+            now,
+        )
+        expect(s.perDay).toHaveLength(14)
+        expect(s.perDay[13].count).toBe(1) // today
+        expect(s.perDay[12].count).toBe(2) // yesterday
+        expect(s.perDay[0].count).toBe(0) // 13 days ago
+    })
+})
+
+describe('removalSourceLabel', () => {
+    it('maps known sources and passes unknown through', () => {
+        expect(removalSourceLabel('communityFilter')).toBe('community filter')
+        expect(removalSourceLabel('moderator')).toBe('moderator')
+        expect(removalSourceLabel('')).toBe('unknown')
+        expect(removalSourceLabel('weird')).toBe('weird')
+    })
+})
+
+describe('export', () => {
+    it('toCSV: header row + plain fields unquoted, special chars escaped', () => {
+        const csv = toCSV([
+            rec({ id: 1, text: 'plain' }),
+            rec({ id: 2, text: 'has, comma "and" quote\nnewline' }),
+        ])
+        expect(csv.split('\n')[0]).toBe('id,type,source,community,author,removed_by,status,created,observed,reapproved,title,text')
+        expect(csv).toContain(',plain')
+        expect(csv).toContain('"has, comma ""and"" quote\nnewline"') // quoted + doubled quotes
+    })
+    it('toJSON: round-trips the records', () => {
+        const recs = [rec({ id: 1 }), rec({ id: 2, source: 'other' })]
+        expect(JSON.parse(toJSON(recs))).toEqual(recs)
+    })
+})

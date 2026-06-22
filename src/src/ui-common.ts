@@ -1,0 +1,13 @@
+import type { RemovedRecord } from './storage'
+
+export function sendMessage<T = any>(message: unknown): Promise<T> {
+    return new Promise(resolve => chrome.runtime.sendMessage(message, resolve))
+}
+
+// Short, human label for a removed item's status (no "publicly_" noise).
+export function statusLabel(rec: RemovedRecord): string {
+    if (rec.reapproved_utc) return 're-approved'
+    if (rec.status === 'deleted') return 'deleted'
+    if (rec.status === 'shadow_removed') return 'hidden'
+    return 'removed'
+}

@@ -1,0 +1,22 @@
+GhostedWatch tells you when your own posts and comments on the .win sites
+(patriots.win / scored.co / communities.win) have been removed — including
+the kind of removal where you still see your content but everyone else sees a
+"removed by community filter" placeholder.
+
+Features:
+
+★ Monitors your own posts and comments and notifies you the moment one is removed
+★ Watch anyone's content: a Watch button on every post and comment lets you monitor
+  others too — a single item, a whole thread (post + all comments), a user's entire
+  history, or a community's new feed — and alerts you when any of it is removed
+★ Shows the text/title that was posted, even after it's removed
+★ Highlights removed content in-page (threads, user pages and feeds), labeled
+  with who/how it was removed
+★ Confirms what logged-out visitors actually see (a placeholder, or nothing)
+★ Works across the platform's communities and domains
+★ Private by design: everything runs in your own browser — no analytics, no tracking,
+  no third-party servers, and it never posts or votes on your behalf
+
+VERSION HISTORY:
+0.0.1
+Initial release: monitors your removed posts and comments, recovers the text you posted, highlights removals in-page, and audits the public view to confirm what others see.

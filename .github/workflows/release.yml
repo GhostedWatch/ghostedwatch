@@ -1,0 +1,49 @@
+name: Release
+
+# Tag a release to build and publish, e.g. `git tag v0.0.1 && git push --tags`.
+# Requires these repository secrets:
+#   Chrome Web Store: CWS_EXTENSION_ID, CWS_CLIENT_ID, CWS_CLIENT_SECRET, CWS_REFRESH_TOKEN
+#   Firefox AMO:      AMO_JWT_ISSUER, AMO_JWT_SECRET
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack enable
+      - run: yarn install --immutable
+
+      - name: Verify the tag matches manifest.version
+        run: |
+          MANIFEST=$(node -p "require('./src/manifest.json').version")
+          TAG=${GITHUB_REF_NAME#v}
+          test "$MANIFEST" = "$TAG" || (echo "tag $TAG != manifest $MANIFEST" && exit 1)
+
+      - run: yarn typecheck && yarn test && yarn build-chrome && yarn build-firefox
+
+      - name: Publish to Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: yarn publish:chrome
+
+      - name: Publish to Firefox AMO
+        run: >
+          yarn publish:firefox
+          --api-key "${{ secrets.AMO_JWT_ISSUER }}"
+          --api-secret "${{ secrets.AMO_JWT_SECRET }}"
+
+      - name: Attach zips to the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            chrome.zip
+            firefox.zip

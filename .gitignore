@@ -1,0 +1,12 @@
+node_modules/
+dist-chrome/
+dist-firefox/
+chrome.zip
+firefox.zip
+.yarn/cache/
+.yarn/install-state.gz
+.env
+test-results/
+playwright-report/
+.e2e-user-data/
+web-ext-artifacts/
