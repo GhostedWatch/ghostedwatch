@@ -1,6 +1,6 @@
 {
   "name": "ghostedwatch",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Notifies you when your own content on patriots.win / scored.co / communities.win has been removed, and lets you self-test for shadow bans.",
   "license": "GPL-3.0",
   "private": true,

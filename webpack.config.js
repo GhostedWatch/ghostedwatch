@@ -41,7 +41,7 @@ function transformManifest(buffer) {
         manifest.permissions = manifest.permissions.concat(manifest.host_permissions || [])
         delete manifest.host_permissions
         manifest.manifest_version = 2
-        manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com' }, gecko_android: {} }
+        manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com', strict_min_version: '109.0' } }
         manifest.background = { scripts: [manifest.background.service_worker], persistent: false }
         manifest.browser_action = manifest.action
         delete manifest.action
