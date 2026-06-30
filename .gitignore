@@ -3,6 +3,7 @@ dist-chrome/
 dist-firefox/
 chrome.zip
 firefox.zip
+source.zip
 .yarn/cache/
 .yarn/install-state.gz
 .env

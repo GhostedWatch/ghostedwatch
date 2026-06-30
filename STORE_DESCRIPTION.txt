@@ -17,6 +17,11 @@ Features:
 ★ Private by design: everything runs in your own browser — no analytics, no tracking,
   no third-party servers, and it never posts or votes on your behalf
 
+Made in America 🇺🇸 · Independent and private by design.
+
 VERSION HISTORY:
+0.0.2
+Added feedback link — tap "Send Feedback" on the Help page to share bugs, ideas, or questions.
+
 0.0.1
 Initial release: monitors your removed posts and comments, recovers the text you posted, highlights removals in-page, and audits the public view to confirm what others see.

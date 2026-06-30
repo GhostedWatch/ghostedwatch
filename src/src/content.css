@@ -1141,6 +1141,10 @@ a.wrow-title:hover {
     margin-top: 30px;
     text-align: center;
 }
+.help-foot-sep {
+    margin: 0 6px;
+    color: var(--ink-dim);
+}
 
 /* ============================================================= */
 /* Insights page                                                  */

@@ -42,6 +42,7 @@ function transformManifest(buffer) {
         delete manifest.host_permissions
         manifest.manifest_version = 2
         manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com', strict_min_version: '109.0' } }
+        manifest.data_collection_permissions = { required: false, optional: false }
         manifest.background = { scripts: [manifest.background.service_worker], persistent: false }
         manifest.browser_action = manifest.action
         delete manifest.action

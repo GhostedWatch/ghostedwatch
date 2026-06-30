@@ -181,6 +181,10 @@ function Help() {
                     <a href={SITE} target="_blank" rel="noreferrer">
                         ghostedwatch.com
                     </a>
+                    <span className="help-foot-sep">·</span>
+                    <a href={`${SITE}feedback.html`} target="_blank" rel="noreferrer">
+                        Send Feedback
+                    </a>
                 </div>
             </div>
         </div>
