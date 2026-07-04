@@ -84,8 +84,11 @@ yarn install         # respects the 7-day age gate, runs no install scripts
 yarn typecheck
 yarn test            # vitest: id<->uuid encoding, profile normalization, removal-detection
                      #   threshold, notify-once orchestration, url parsing, public-view classifier
-yarn build-chrome    # -> dist-chrome/ and chrome.zip
-yarn build-firefox   # -> dist-firefox/ and firefox.zip  (manifest rewritten to MV2)
+yarn build-chrome    # PROD -> dist-chrome/ and chrome.zip
+yarn build-firefox   # PROD -> dist-firefox/ and firefox.zip  (manifest rewritten to MV2)
+yarn build-chrome-dev   # DEV -> dist-chrome-dev/   (debug breadcrumbs, inline maps)
+yarn build-firefox-dev  # DEV -> dist-firefox-dev/  — dev and prod never share a dir,
+                        #   so a dev build can't be shipped by mistake
 yarn test:e2e        # Playwright: loads the real built extension in Chromium and
                      #   checks the popup/options/history pages.
                      #   First time: `yarn playwright install chromium`.
@@ -101,37 +104,48 @@ yarn test:firefox    # headless-Firefox smoke test over Marionette: installs the
                      #   carry the data-gw-* breadcrumbs the test reads).
 ```
 
-Load unpacked: Chrome → `chrome://extensions` → Developer mode → Load unpacked →
-`dist-chrome/`. Firefox → `about:debugging` → Load Temporary Add-on → any file in
-`dist-firefox/`.
+Load unpacked (dev builds): Chrome → `chrome://extensions` → Developer mode → Load
+unpacked → `dist-chrome-dev/`. Firefox → `about:debugging` → Load Temporary Add-on →
+any file in `dist-firefox-dev/`.
 
 ## Release
 
-Tag a release to build + publish both stores via GitHub Actions (`release.yml`):
+One-time setup: fill the publishing block in `.env` (see `.env.example` — the
+variable names match the reveddit real-time extension, so account-level values
+copy over; only `CHROME_EXTENSION_ID` is per-extension). Credentials guides:
+Chrome OAuth client —
+https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md;
+AMO keys — https://addons.mozilla.org/developers/addon/api/key/.
 
 ```bash
-git tag v<version>   # must equal src/manifest.json "version"
-git push origin main --tags
+yarn publish:all           # preflight → publish Chrome → publish Firefox
+yarn publish:chrome        # CWS: fresh prod build → upload zip → pauses while you
+                           #   paste the description (the CWS API can't update listing
+                           #   text; it's copied to your clipboard + the dashboard
+                           #   opens) → publish. Expired refresh token? It offers
+                           #   `yarn refresh:chrome` (localhost OAuth flow that
+                           #   rewrites .env) and retries.
+yarn publish:firefox       # AMO: fresh prod build → source.zip (git archive HEAD —
+                           #   commit first!) → web-ext sign (listed) → updates the
+                           #   store description through the AMO API.
+yarn publish:firefox:text  # only push STORE_DESCRIPTION.txt to the AMO listing
 ```
 
-One-time setup — repository secrets (Settings → Secrets → Actions):
+`preflight` (run by every publish command) is typecheck + unit tests + Chromium
+e2e against the dev build + the headless-Firefox live probe (`test:firefox`).
+Dev builds go to `dist-*-dev/`, prod to `dist-*/` — and the publish scripts each
+rebuild their production artifact right before uploading, so nothing stale (or
+dev) can end up in a store submission.
 
-- **Chrome Web Store** (`CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
-  `CWS_REFRESH_TOKEN`): extension ID from the developer-dashboard listing URL; the
-  OAuth client (Desktop type) comes from a Google Cloud project with the
-  "Chrome Web Store API" enabled — see
-  https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md
-- **Firefox AMO** (`AMO_JWT_ISSUER`, `AMO_JWT_SECRET`): generate at
-  https://addons.mozilla.org/developers/addon/api/key/
+Both flows refuse to run if `STORE_DESCRIPTION.txt` has no entry for the current
+manifest version. AMO requires human-readable source for webpack-bundled
+submissions — reviewers rebuild with the steps in **Develop** above (Node 20,
+`yarn install`, `yarn build-firefox`).
 
-Publishing locally instead: set the same values as env vars
-(`EXTENSION_ID`/`CLIENT_ID`/`CLIENT_SECRET`/`REFRESH_TOKEN` for Chrome,
-`WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` for AMO), then
-`yarn build-chrome && yarn build-firefox && yarn publish:chrome && yarn publish:firefox`.
-
-`publish:firefox` also uploads `source.zip` (`git archive HEAD`) — AMO requires
-human-readable source for webpack-bundled submissions; reviewers rebuild with the
-steps in **Develop** above (Node 20, `yarn install`, `yarn build-firefox`).
+CI alternative: tag `v<version>` (must equal `src/manifest.json` version) and push —
+`release.yml` builds, publishes both stores (secrets: `CWS_*`, `AMO_JWT_*`), and
+attaches the zips to the GitHub release. Interactive steps are skipped in CI, so
+verify the Chrome listing description in the dashboard after a tagged release.
 
 ## Verified against live data (throwaway test account)
 

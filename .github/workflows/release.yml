@@ -27,19 +27,22 @@ jobs:
 
       - run: yarn typecheck && yarn test && yarn build-chrome && yarn build-firefox
 
+      # The publish scripts skip their interactive steps when CI is set. The
+      # Chrome listing description still needs a manual paste in the dashboard
+      # (the CWS API can't update text); AMO's description IS updated by API.
       - name: Publish to Chrome Web Store
         env:
-          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-        run: yarn publish:chrome
+          CHROME_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: node scripts/publishing/publish-chrome.mjs
 
       - name: Publish to Firefox AMO
-        run: >
-          yarn publish:firefox
-          --api-key "${{ secrets.AMO_JWT_ISSUER }}"
-          --api-secret "${{ secrets.AMO_JWT_SECRET }}"
+        env:
+          FIREFOX_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: node scripts/publishing/publish-firefox.mjs
 
       - name: Attach zips to the GitHub release
         uses: softprops/action-gh-release@v2

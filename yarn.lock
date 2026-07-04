@@ -1280,13 +1280,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"buffer-crc32@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "buffer-crc32@npm:1.0.0"
-  checksum: 10c0/8b86e161cee4bb48d5fa622cbae4c18f25e4857e5203b89e23de59e627ab26beb82d9d7999f2b8de02580165f61f83f997beaf02980cdf06affd175b651921ab
-  languageName: node
-  linkType: hard
-
 "buffer-crc32@npm:~0.2.3":
   version: 0.2.13
   resolution: "buffer-crc32@npm:0.2.13"
@@ -1420,28 +1413,6 @@ __metadata:
   version: 1.0.4
   resolution: "chrome-trace-event@npm:1.0.4"
   checksum: 10c0/3058da7a5f4934b87cf6a90ef5fb68ebc5f7d06f143ed5a4650208e5d7acae47bc03ec844b29fbf5ba7e46e8daa6acecc878f7983a4f4bb7271593da91e61ff5
-  languageName: node
-  linkType: hard
-
-"chrome-webstore-upload-cli@npm:4.0.0":
-  version: 4.0.0
-  resolution: "chrome-webstore-upload-cli@npm:4.0.0"
-  dependencies:
-    chrome-webstore-upload: "npm:^6.0.0"
-    meow: "npm:^12.1.1"
-  bin:
-    chrome-webstore-upload: source/cli.js
-  checksum: 10c0/72f9843fc2e130ff3b71ffb343d2a77337c2bdf4ec2e45ab48d0bf88ecca73c10f41013eed58eba3ea71d7c64c1442f67a04d20f25a6eaed6f140c767b685e9a
-  languageName: node
-  linkType: hard
-
-"chrome-webstore-upload@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "chrome-webstore-upload@npm:6.0.0"
-  dependencies:
-    junk: "npm:^4.0.1"
-    yazl: "npm:^3.3.1"
-  checksum: 10c0/3c190f603645f930c4fefa78058c56ad9df6b1e907468dd718ef4382b3557efd1b2ff7041c04a02a42ca95c4f5ccd08efa4d480ca02a0db6c930b8021a13f72f
   languageName: node
   linkType: hard
 
@@ -2400,7 +2371,6 @@ __metadata:
     "@types/chrome": "npm:0.1.42"
     "@types/react": "npm:19.2.14"
     "@types/react-dom": "npm:19.2.3"
-    chrome-webstore-upload-cli: "npm:4.0.0"
     copy-webpack-plugin: "npm:11.0.0"
     react: "npm:19.0.6"
     react-dom: "npm:19.0.6"
@@ -2957,13 +2927,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"junk@npm:^4.0.1":
-  version: 4.0.1
-  resolution: "junk@npm:4.0.1"
-  checksum: 10c0/091117a5dcf65b19a3e4b8506d95d6ab152b5b5fe6f10e8998de950b0f9d689f14d9b63bb07863b8c86c18511fd1b9a21e9a16e686246436558338ed2e8a4548
-  languageName: node
-  linkType: hard
-
 "jwa@npm:^2.0.1":
   version: 2.0.1
   resolution: "jwa@npm:2.0.1"
@@ -3274,13 +3237,6 @@ __metadata:
   version: 1.3.0
   resolution: "marky@npm:1.3.0"
   checksum: 10c0/6619cdb132fdc4f7cd3e2bed6eebf81a38e50ff4b426bbfb354db68731e4adfebf35ebfd7c8e5a6e846cbf9b872588c4f76db25782caee8c1529ec9d483bf98b
-  languageName: node
-  linkType: hard
-
-"meow@npm:^12.1.1":
-  version: 12.1.1
-  resolution: "meow@npm:12.1.1"
-  checksum: 10c0/a125ca99a32e2306e2f4cbe651a0d27f6eb67918d43a075f6e80b35e9bf372ebf0fc3a9fbc201cbbc9516444b6265fb3c9f80c5b7ebd32f548aa93eb7c28e088
   languageName: node
   linkType: hard
 
@@ -5254,15 +5210,6 @@ __metadata:
     buffer-crc32: "npm:~0.2.3"
     pend: "npm:~1.2.0"
   checksum: 10c0/fe1997a8ee53c42556789ca61a28278e9ea2ca8f68cae1ae9904edaf3b5fbbc5d5537a3fb8623ac82c2bd0bd9d67233ce593f1acaadfb8718489d9f06d1bb3d0
-  languageName: node
-  linkType: hard
-
-"yazl@npm:^3.3.1":
-  version: 3.3.1
-  resolution: "yazl@npm:3.3.1"
-  dependencies:
-    buffer-crc32: "npm:^1.0.0"
-  checksum: 10c0/8290dffd8afc4ea32459c0ce5d7e22af250515aa0170f289cbc896530d3cd40c5be4788b5e3e7aa5cd21889778071f424e1824faadbd257dbd5ff80fb60d1fa6
   languageName: node
   linkType: hard
 

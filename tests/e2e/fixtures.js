@@ -12,7 +12,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const extensionPath = path.join(__dirname, '..', '..', 'dist-chrome')
+const extensionPath = path.join(__dirname, '..', '..', 'dist-chrome-dev')
 
 // minimal .env loader so we don't need a dotenv dependency
 function loadDotenv() {

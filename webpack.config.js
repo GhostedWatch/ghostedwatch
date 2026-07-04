@@ -28,7 +28,9 @@ function parseChangelog() {
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 const browserIsFirefox = process.env.BROWSER === 'firefox'
 const builtFor = browserIsFirefox ? 'firefox' : 'chrome'
-const distPath = path.join(__dirname, browserIsFirefox ? 'dist-firefox' : 'dist-chrome')
+// Dev and prod builds land in separate dirs so a dev build (debug breadcrumbs,
+// inline source maps) can never be mistaken for — or shipped as — a store artifact.
+const distPath = path.join(__dirname, `dist-${builtFor}${mode === 'development' ? '-dev' : ''}`)
 const distSrcPath = path.join(distPath, 'src')
 
 // Rewrite the MV3 manifest into an MV2 manifest for Firefox. Mirrors the

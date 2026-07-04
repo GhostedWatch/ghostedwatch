@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test'
 
-// E2E tests load the REAL built extension (dist-chrome) in Chromium and verify
+// E2E tests load the REAL built extension (dist-chrome-dev) in Chromium and verify
 // behavior the way a user would see it. Run `yarn build-chrome` first.
 export default defineConfig({
     testDir: './tests/e2e',

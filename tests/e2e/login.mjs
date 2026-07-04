@@ -14,7 +14,7 @@ import readline from 'readline'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const extensionPath = path.join(__dirname, '..', '..', 'dist-chrome')
+const extensionPath = path.join(__dirname, '..', '..', 'dist-chrome-dev')
 const profileDir = path.join(__dirname, '..', '..', '.e2e-user-data')
 const origin = process.env.WIN_ORIGIN || 'https://patriots.win'
 

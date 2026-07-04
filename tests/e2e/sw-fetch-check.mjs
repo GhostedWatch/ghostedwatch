@@ -5,7 +5,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ext = path.join(__dirname, '..', '..', 'dist-chrome')
+const ext = path.join(__dirname, '..', '..', 'dist-chrome-dev')
 
 const ctx = await chromium.launchPersistentContext('', {
     headless: false,

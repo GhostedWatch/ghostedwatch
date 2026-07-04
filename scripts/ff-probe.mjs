@@ -1,5 +1,5 @@
 // Firefox smoke test: drives a headless Firefox over the Marionette protocol
-// (no extra dependencies) to install dist-firefox as a temporary add-on and
+// (no extra dependencies) to install dist-firefox-dev as a temporary add-on and
 // verify the full pipeline: background start, alarm, content-script injection
 // on the live site, content<->background messaging, popup round-trips, and the
 // set-auth -> get-auth-status storage path.
@@ -10,7 +10,7 @@
 // session, which can't exercise the whoami fetch. Never logs credentials/tokens.
 //
 // Requires a real network connection (loads patriots.win) and /Applications/Firefox.app.
-// Usage: yarn test:firefox   (or: node scripts/ff-probe.mjs [path/to/dist-firefox])
+// Usage: yarn test:firefox   (or: node scripts/ff-probe.mjs [path/to/dist])
 import net from 'net'
 import { spawn } from 'child_process'
 import fs from 'fs'
@@ -18,18 +18,12 @@ import path from 'path'
 import os from 'os'
 import { fileURLToPath } from 'url'
 
+import { loadDotEnv } from './lib/env.mjs'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+loadDotEnv() // WIN_USER/WIN_PASS for the live-login test; absent .env is fine
 
-// Minimal .env loader (no dependency): populate process.env from ../.env if present.
-try {
-    const envFile = path.join(__dirname, '..', '.env')
-    for (const line of fs.readFileSync(envFile, 'utf8').split('\n')) {
-        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/)
-        if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
-    }
-} catch { /* no .env — fine, falls back to fake session */ }
-
-const EXT_DIR = process.argv[2] || path.join(__dirname, '..', 'dist-firefox')
+const EXT_DIR = process.argv[2] || path.join(__dirname, '..', 'dist-firefox-dev')
 const EXT_ID = 'ghostedwatch@reveddit.com'
 const WIN_ORIGIN = process.env.WIN_ORIGIN || 'https://patriots.win'
 const WIN_USER = process.env.WIN_USER || ''

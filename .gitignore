@@ -1,6 +1,8 @@
 node_modules/
 dist-chrome/
 dist-firefox/
+dist-chrome-dev/
+dist-firefox-dev/
 chrome.zip
 firefox.zip
 source.zip
