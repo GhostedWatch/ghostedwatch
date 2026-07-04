@@ -30,8 +30,10 @@ GhostedWatch is built to keep everything on your own machine.
 - `notifications` — to tell you when your content is removed.
 - `alarms` — to schedule periodic checks.
 - `storage` — to remember what it's watching and what it found.
-- host access to `*.scored.co`, `*.patriots.win`, `*.communities.win` — to read
-  your content and highlight removals on those pages.
+- host access to the .win community sites (`*.scored.co`, `*.patriots.win`,
+  `*.communities.win`, `*.kotakuinaction2.win`, `*.greatawakening.win`,
+  `*.conspiracies.win`, `*.omegacanada.win`) — to read your content and
+  highlight removals on those pages.
 
 ## Removing your data
 

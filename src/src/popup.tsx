@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { getRemoved, getOwnItems, getLastOrigin, getLastCheck, type RemovedRecord } from './storage'
 import { sendMessage } from './ui-common'
 import { permalink } from './common'
+import { winDomainOf, HOME_COMMUNITY } from './constants'
 import api from './api'
 import { prettyAgo } from './time'
 import { EyeMark } from './Ghost'
@@ -20,13 +21,15 @@ function parsePage(url?: string): Page | null {
     } catch {
         return null
     }
-    if (!/(^|\.)(scored\.co|patriots\.win|communities\.win)$/.test(host)) return null
+    const domain = winDomainOf(host)
+    if (!domain) return null
     const um = path.match(/\/u\/([^/]+)/)
     if (um) return { kind: 'user', name: decodeURIComponent(um[1]) }
     if (/\/p\//.test(path)) return null // a post/thread page, not a feed
     const cm = path.match(/\/c\/([^/]+)/)
     if (cm) return { kind: 'feed', name: decodeURIComponent(cm[1]) }
-    if (host.endsWith('patriots.win')) return { kind: 'feed', name: 'TheDonald' }
+    // a dedicated domain's front page is its home community's feed
+    if (HOME_COMMUNITY[domain]) return { kind: 'feed', name: HOME_COMMUNITY[domain] }
     return null
 }
 const keyOf = (p: Page) => `${p.kind}:${p.name.toLowerCase()}`

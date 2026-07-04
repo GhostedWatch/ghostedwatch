@@ -1,7 +1,7 @@
 {
     "name": "GhostedWatch",
-    "description": "Notifies you when your own content on patriots.win / scored.co / communities.win is removed, and lets you self-test for shadow bans.",
-    "version": "0.0.3",
+    "description": "Alerts you when your content on the .win communities (patriots.win, scored.co, and more) is removed. Self-test for shadow bans.",
+    "version": "0.0.4",
     "permissions": [
         "notifications",
         "alarms",
@@ -12,7 +12,11 @@
         "https://*.scored.co/*",
         "https://api.scored.co/*",
         "https://*.patriots.win/*",
-        "https://*.communities.win/*"
+        "https://*.communities.win/*",
+        "https://*.kotakuinaction2.win/*",
+        "https://*.greatawakening.win/*",
+        "https://*.conspiracies.win/*",
+        "https://*.omegacanada.win/*"
     ],
     "icons": {
         "16": "icons/16.png",
@@ -29,11 +33,17 @@
     },
     "web_accessible_resources": [
         {
-            "resources": ["src/inject.js"],
+            "resources": [
+                "src/inject.js"
+            ],
             "matches": [
                 "https://*.scored.co/*",
                 "https://*.patriots.win/*",
-                "https://*.communities.win/*"
+                "https://*.communities.win/*",
+                "https://*.kotakuinaction2.win/*",
+                "https://*.greatawakening.win/*",
+                "https://*.conspiracies.win/*",
+                "https://*.omegacanada.win/*"
             ]
         }
     ],
@@ -42,9 +52,15 @@
             "matches": [
                 "https://*.scored.co/*",
                 "https://*.patriots.win/*",
-                "https://*.communities.win/*"
+                "https://*.communities.win/*",
+                "https://*.kotakuinaction2.win/*",
+                "https://*.greatawakening.win/*",
+                "https://*.conspiracies.win/*",
+                "https://*.omegacanada.win/*"
             ],
-            "js": ["src/content.js"],
+            "js": [
+                "src/content.js"
+            ],
             "run_at": "document_start"
         }
     ],

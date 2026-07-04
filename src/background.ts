@@ -1,4 +1,4 @@
-import { APP_NAME } from './src/constants'
+import { APP_NAME, WIN_TAB_PATTERNS } from './src/constants'
 import { ALARM_NAME, setAlarm, setUnseenBadge, createNotification, createTab, permalink } from './src/common'
 import api from './src/api'
 import { runCycle } from './src/poller'
@@ -28,7 +28,7 @@ import {
     type OtherItem,
 } from './src/storage'
 
-const WIN_TABS = ['https://*.scored.co/*', 'https://*.patriots.win/*', 'https://*.communities.win/*']
+const WIN_TABS = WIN_TAB_PATTERNS
 
 // Dev-build breadcrumbs, mirrored by the content script's (see content.ts).
 const dlog = (...args: unknown[]) => { if (__DEV__) console.log('[GhostedWatch bg]', ...args) }

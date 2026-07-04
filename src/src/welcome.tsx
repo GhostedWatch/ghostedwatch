@@ -17,9 +17,10 @@ function Welcome() {
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '8px 4px' }}>
             <h1>{APP_NAME}</h1>
             <p>
-                It watches <strong>your own</strong> posts and comments on the .win sites (patriots.win / scored.co)
-                and tells you when one is removed — including the kind where you still see your content but everyone
-                else sees a "removed by community filter" placeholder.
+                It watches <strong>your own</strong> posts and comments on the .win communities (patriots.win,
+                scored.co, kotakuinaction2.win, and the other dedicated community domains) and tells you when one is
+                removed — including the kind where you still see your content but everyone else sees a "removed by
+                community filter" placeholder.
             </p>
 
             <h2>Connect your account</h2>

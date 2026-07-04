@@ -71,9 +71,10 @@ function Help() {
             <div className="help-body">
                 <h1 className="help-h1">Know the moment your posts go quiet.</h1>
                 <p className="help-lead">
-                    {APP_NAME} tells you when content on the <strong>.win sites</strong> (patriots.win, scored.co,
-                    communities.win) is removed — including the silent kind, where the author still sees it but everyone
-                    else gets a “removed by community filter” placeholder, or nothing at all.
+                    {APP_NAME} tells you when content on the <strong>.win communities</strong> (patriots.win, scored.co,
+                    kotakuinaction2.win, greatawakening.win, conspiracies.win, omegacanada.win) is removed — including
+                    the silent kind, where the author still sees it but everyone else gets a “removed by community
+                    filter” placeholder, or nothing at all.
                 </p>
 
                 <section className="help-sec">
