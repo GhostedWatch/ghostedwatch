@@ -1,7 +1,8 @@
 import type { RemovedRecord } from './storage'
+import api from './api'
 
 export function sendMessage<T = any>(message: unknown): Promise<T> {
-    return new Promise(resolve => chrome.runtime.sendMessage(message, resolve))
+    return api.runtime.sendMessage(message)
 }
 
 // Short, human label for a removed item's status (no "publicly_" noise).

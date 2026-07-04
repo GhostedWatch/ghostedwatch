@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getRemoved, getOwnItems, type RemovedRecord } from './storage'
+import api from './api'
 import { computeStats, toCSV, toJSON, type Stats, type Tally } from './stats'
 import { prettyDuration } from './time'
 import { EyeMark } from './Ghost'
@@ -51,7 +52,7 @@ function Header() {
             <a
                 className="gw-bar-link"
                 href="#"
-                onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('src/help.html') })}
+                onClick={() => api.tabs.create({ url: api.runtime.getURL('src/help.html') })}
             >
                 How it works →
             </a>

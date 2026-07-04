@@ -1,6 +1,6 @@
 {
   "name": "ghostedwatch",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Notifies you when your own content on patriots.win / scored.co / communities.win has been removed, and lets you self-test for shadow bans.",
   "license": "GPL-3.0",
   "private": true,
@@ -17,9 +17,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:firefox": "node scripts/ff-probe.mjs",
     "e2e:login": "node tests/e2e/login.mjs",
+    "source:zip": "git archive --format=zip -o source.zip HEAD",
     "publish:chrome": "chrome-webstore-upload upload --source chrome.zip --auto-publish",
-    "publish:firefox": "web-ext sign --channel=listed --source-dir dist-firefox --artifacts-dir web-ext-artifacts"
+    "publish:firefox": "yarn source:zip && web-ext sign --channel=listed --source-dir dist-firefox --artifacts-dir web-ext-artifacts --upload-source-code source.zip"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",

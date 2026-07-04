@@ -5,14 +5,14 @@ import { describe, it, expect, beforeEach } from 'vitest'
 // the global before the tests call anything is enough.
 const store: { local: Record<string, unknown>; sync: Record<string, unknown> } = { local: {}, sync: {} }
 const area = (bag: Record<string, unknown>) => ({
-    get: (keys: string[], cb: (r: Record<string, unknown>) => void) => {
+    get: (keys: string[]) => {
         const out: Record<string, unknown> = {}
         for (const k of keys) if (k in bag) out[k] = bag[k]
-        cb(out)
+        return Promise.resolve(out)
     },
-    set: (obj: Record<string, unknown>, cb: () => void) => {
+    set: (obj: Record<string, unknown>) => {
         Object.assign(bag, obj)
-        cb()
+        return Promise.resolve()
     },
 })
 ;(globalThis as any).chrome = {

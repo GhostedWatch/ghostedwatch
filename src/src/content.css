@@ -558,7 +558,7 @@ a:hover {
 /* Options redesign — grouped, aligned, calm                      */
 /* ============================================================= */
 .opt-wrap {
-    padding: 24px 16px;
+    padding: 10px 16px;
 }
 .opt-card {
     width: 460px;
@@ -588,7 +588,7 @@ a:hover {
     color: var(--accent-soft);
 }
 .opt-body {
-    padding: 20px 18px;
+    padding: 16px 18px;
 }
 .opt-section-label {
     font-size: 11px;
@@ -602,13 +602,13 @@ a:hover {
     border: 1px solid var(--hairline);
     border-radius: 11px;
     overflow: hidden;
-    margin-bottom: 22px;
+    margin-bottom: 16px;
 }
 .opt-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 15px;
+    padding: 12px 15px;
 }
 .opt-row-main {
     flex: 1;
@@ -684,7 +684,7 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 .opt-save {
     padding: 9px 18px;

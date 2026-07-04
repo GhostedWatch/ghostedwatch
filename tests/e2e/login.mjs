@@ -1,8 +1,13 @@
 // One-time login for live e2e tests. Opens Chromium with the built extension and a
-// PERSISTENT profile, lets you log in by hand (captcha and all), and saves the
-// session. Then run live tests with:  WIN_E2E_LIVE=1 yarn test:e2e
+// PERSISTENT profile, lets you log in by hand, and saves the session. Then run live
+// tests with:  WIN_E2E_LIVE=1 yarn test:e2e
 //
 //   yarn e2e:login
+//
+// Note: the .win login is a plain form POST (no captcha) — /api/v2/user/login then
+// /api/v2/token for the api_key/secret. `yarn test:firefox` (scripts/ff-probe.mjs)
+// automates that end-to-end from WIN_USER/WIN_PASS; this manual flow stays as the
+// Chrome equivalent and a fallback if the login shape ever changes.
 import { chromium } from '@playwright/test'
 import path from 'path'
 import readline from 'readline'

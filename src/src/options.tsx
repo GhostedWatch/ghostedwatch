@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getOptions, setOptions, INTERVAL_DEFAULT } from './storage'
+import api from './api'
 import { EyeMark } from './Ghost'
 
 function OptionsPage() {
@@ -49,7 +50,7 @@ function OptionsPage() {
                     <a
                         className="opt-head-link"
                         href="#"
-                        onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('src/help.html') })}
+                        onClick={() => api.tabs.create({ url: api.runtime.getURL('src/help.html') })}
                     >
                         How it works →
                     </a>

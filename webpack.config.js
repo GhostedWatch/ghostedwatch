@@ -36,14 +36,13 @@ const distSrcPath = path.join(distPath, 'src')
 function transformManifest(buffer) {
     const manifest = JSON.parse(buffer.toString())
     if (browserIsFirefox) {
-        // `scripting` is MV3-only; Firefox MV2 doesn't use it (waits for navigation)
-        manifest.permissions = manifest.permissions.filter(p => p !== 'scripting')
         manifest.permissions = manifest.permissions.concat(manifest.host_permissions || [])
         delete manifest.host_permissions
         manifest.manifest_version = 2
-        manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com', strict_min_version: '109.0' } }
-        manifest.data_collection_permissions = { required: false, optional: false }
-        manifest.background = { scripts: [manifest.background.service_worker], persistent: false }
+        manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com', strict_min_version: '109.0', data_collection_permissions: { required: ['none'], optional: ['technicalAndInteraction'] } } }
+        manifest.background.scripts = [manifest.background.service_worker]
+        manifest.background.persistent = true
+        delete manifest.background.service_worker
         manifest.browser_action = manifest.action
         delete manifest.action
         manifest.web_accessible_resources = manifest.web_accessible_resources[0].resources
@@ -100,7 +99,7 @@ export default {
         new CopyWebpackPlugin({
             patterns: [
                 { from: './src/manifest.json', to: distPath, transform: transformManifest },
-                { from: 'src/icons', to: path.join(distPath, 'icons') },
+                { from: 'src/icons', to: path.join(distPath, 'icons'), globOptions: { ignore: ['**/.DS_Store'] } },
                 { context: 'src/src/', from: '*.html', to: distSrcPath },
                 { context: 'src/src/', from: 'content.css', to: distSrcPath, noErrorOnMissing: true },
             ],

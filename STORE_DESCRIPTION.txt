@@ -20,6 +20,9 @@ Features:
 Made in America 🇺🇸 · Independent and private by design.
 
 VERSION HISTORY:
+0.0.3
+Fixed Firefox — monitoring now works reliably on Firefox. Already-open .win tabs are connected immediately on install/update/startup.
+
 0.0.2
 Added feedback link — tap "Send Feedback" on the Help page to share bugs, ideas, or questions.
 

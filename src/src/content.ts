@@ -1,37 +1,33 @@
-// Content script. Runs on the .win site and does only what needs the page context:
-//   1. injects inject.js to capture the ids/text of posts & comments you submit,
-//   2. captures the site's API tokens + your username and hands them to the
-//      background, which then polls for removals on its own (even with no tab open),
-//   3. paints the in-page highlights for known removals,
-//   4. adds a "Watch" button to every comment (to monitor other users' comments).
-// All detection lives in the background poller — there is no polling here.
 import { MSG_SOURCE } from './constants'
+import api from './api'
 import { setRemovedSet, startHighlighting, type RemovedLite } from './highlight'
 import { startWatchButtons } from './watch-ui'
 
 export {} // module scope
 
-// Runs fresh on each injection (manifest load, navigation, or the background's
-// install/reload executeScript) so it always re-captures the session. The only
-// thing that must not double-run is the page-context fetch/XHR wrapping, which is
-// guarded inside inject.ts itself.
+// Dev-build breadcrumbs: console lines + DOM attributes that automated tests
+// (and humans) can read to see which stage of the pipeline was reached.
+const dlog = (...args: unknown[]) => { if (__DEV__) console.log('[GhostedWatch]', ...args) }
+const stamp = (k: string, v: string) => { if (__DEV__) document.documentElement.setAttribute(`data-gw-${k}`, v) }
+
 main()
 
 function main() {
+    dlog('content script injected on', location.href)
+    stamp('cs', 'injected')
     function injectPageScript() {
         const script = document.createElement('script')
-        script.src = chrome.runtime.getURL('src/inject.js')
+        script.src = api.runtime.getURL('src/inject.js')
         script.onload = () => script.remove()
         ;(document.head || document.documentElement).appendChild(script)
     }
 
-    // Relay captured posts/comments from the page-context inject script.
     window.addEventListener('message', event => {
         if (event.source !== window) return
         const data = event.data
         if (!data || data.source !== MSG_SOURCE) return
         if (data.type === 'created-comment' || data.type === 'created-post') {
-            chrome.runtime.sendMessage({
+            api.runtime.sendMessage({
                 action: 'watch-own',
                 comment: {
                     id: data.id,
@@ -50,29 +46,49 @@ function main() {
 
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-    // The site keeps its API tokens in localStorage and authenticates with them via
-    // headers (independent of cookies). Hand them + the username to the background so
-    // it can poll without a tab open. Returns true once captured.
     async function sendAuth(): Promise<boolean> {
         const apiKey = localStorage.getItem('api_key') || ''
         const apiSecret = localStorage.getItem('api_secret') || ''
-        if (!apiKey || !apiSecret) return false
+        if (!apiKey || !apiSecret) {
+            stamp('tokens', 'missing')
+            return false
+        }
+        stamp('tokens', 'present')
         try {
-            const res = await fetch('/api/v2/user/about.json?user=me', {
+            // Absolute URL: Firefox content-script fetch has no base URL, so a
+            // relative path throws "not a valid URL" (Chrome resolves it via the page).
+            const res = await fetch(`${location.origin}/api/v2/user/about.json?user=me`, {
                 credentials: 'include',
                 headers: { 'X-Api-Key': apiKey, 'X-Api-Secret': apiSecret },
             })
-            const user = (await res.json())?.users?.[0]?.username
-            if (!user) return false
-            chrome.runtime.sendMessage({ action: 'set-auth', auth: { user, origin: location.origin, apiKey, apiSecret } })
+            const user = (await res.json().catch(() => null))?.users?.[0]?.username
+            if (!user) {
+                dlog('sendAuth: tokens present but about.json returned no user (status', res.status + ')')
+                stamp('auth', 'no-user')
+                return false
+            }
+            dlog('sendAuth: captured session for', user, '— sending set-auth')
+            try {
+                const resp = await api.runtime.sendMessage({
+                    action: 'set-auth',
+                    auth: { user, origin: location.origin, apiKey, apiSecret },
+                })
+                dlog('set-auth acknowledged:', JSON.stringify(resp))
+                stamp('auth', 'sent-ok')
+            } catch (e) {
+                dlog('set-auth sendMessage FAILED:', e instanceof Error ? e.message : String(e))
+                stamp('auth', 'send-failed')
+                return false
+            }
             return true
-        } catch {
-            return false // not logged in yet / transient
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            dlog('sendAuth fetch failed:', msg)
+            stamp('auth', 'fetch-failed: ' + msg.slice(0, 60))
+            return false
         }
     }
 
-    // The SPA populates its tokens after load, so retry until we've captured them
-    // (this runs fresh on every page load), then keep them fresh on an interval.
     async function captureLoop() {
         for (let i = 0; i < 12; i++) {
             if (await sendAuth()) return
@@ -80,23 +96,28 @@ function main() {
         }
     }
 
-    // Repaint highlights from the background's known-removed set.
     async function refreshHighlights() {
-        const list: RemovedLite[] = await new Promise(resolve =>
-            chrome.runtime.sendMessage({ action: 'list-removed' }, resp => resolve(resp?.removed || [])),
-        )
-        setRemovedSet(list)
+        try {
+            const resp = await api.runtime.sendMessage({ action: 'list-removed' })
+            setRemovedSet(resp?.removed || [])
+            dlog('background round-trip OK (list-removed:', (resp?.removed || []).length, 'items)')
+            stamp('bg', 'ok')
+        } catch (e) {
+            dlog('background round-trip FAILED:', e instanceof Error ? e.message : String(e))
+            stamp('bg', 'unreachable')
+            setRemovedSet([])
+        }
     }
 
-    chrome.runtime.onMessage.addListener(msg => {
+    api.runtime.onMessage.addListener(msg => {
         if (msg?.action === 'refresh') refreshHighlights()
-        else if (msg?.action === 'send-auth-now') sendAuth() // popup "reconnect"
+        else if (msg?.action === 'send-auth-now') sendAuth()
     })
 
     injectPageScript()
     startHighlighting()
-    startWatchButtons() // add the "Watch" button to comments + load watched state
-    refreshHighlights() // instant from the store; no network
+    startWatchButtons()
+    refreshHighlights()
     captureLoop()
-    setInterval(sendAuth, 5 * 60 * 1000) // refresh stored tokens periodically
+    setInterval(sendAuth, 5 * 60 * 1000)
 }

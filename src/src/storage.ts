@@ -1,5 +1,6 @@
 import type { CommentStatus, ItemType } from './win-api'
 import { DEFAULT_ORIGIN } from './common'
+import api from './api'
 
 // Storage layout. Only tiny `options` lives in chrome.storage.sync — sync has an
 // 8KB-per-item limit, and the removed/changes maps (which hold recovered text)
@@ -117,20 +118,16 @@ export const REAPPROVAL_CONFIRM_THRESHOLD = 2
 export const DEFAULT_OPTIONS: Options = { interval: INTERVAL_DEFAULT, watchButtons: true, notifyMode: 'each' }
 
 function localGet<T>(key: string, fallback: T): Promise<T> {
-    return new Promise(resolve => {
-        chrome.storage.local.get([key], res => resolve((res[key] as T) ?? fallback))
-    })
+    return api.storage.local.get([key]).then(res => (res[key] as T) ?? fallback)
 }
 function localSet(obj: Record<string, unknown>): Promise<void> {
-    return new Promise(resolve => chrome.storage.local.set(obj, () => resolve()))
+    return api.storage.local.set(obj).then(() => undefined)
 }
 function syncGet<T>(key: string, fallback: T): Promise<T> {
-    return new Promise(resolve => {
-        chrome.storage.sync.get([key], res => resolve((res[key] as T) ?? fallback))
-    })
+    return api.storage.sync.get([key]).then(res => (res[key] as T) ?? fallback)
 }
 function syncSet(obj: Record<string, unknown>): Promise<void> {
-    return new Promise(resolve => chrome.storage.sync.set(obj, () => resolve()))
+    return api.storage.sync.set(obj).then(() => undefined)
 }
 
 // --- auth (so the background can poll the API without an open tab) ---

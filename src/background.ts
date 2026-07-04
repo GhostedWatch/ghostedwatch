@@ -1,5 +1,6 @@
 import { APP_NAME } from './src/constants'
 import { ALARM_NAME, setAlarm, setUnseenBadge, createNotification, createTab, permalink } from './src/common'
+import api from './src/api'
 import { runCycle } from './src/poller'
 import { runOtherCycle, runSourceCycle, watchOtherFromPage } from './src/other'
 import {
@@ -29,14 +30,14 @@ import {
 
 const WIN_TABS = ['https://*.scored.co/*', 'https://*.patriots.win/*', 'https://*.communities.win/*']
 
-// Run one detection cycle (guarded against overlap), notify + refresh on results.
+// Dev-build breadcrumbs, mirrored by the content script's (see content.ts).
+const dlog = (...args: unknown[]) => { if (__DEV__) console.log('[GhostedWatch bg]', ...args) }
+
 let cycling = false
 async function cycle() {
     if (cycling) return
     cycling = true
     try {
-        // your own content, then others' you're watching (anonymously, from here):
-        // individual posts/comments + whole posts, then whole users / community feeds
         const own = await runCycle()
         const origin = await getLastOrigin()
         const o1 = await runOtherCycle(origin)
@@ -69,8 +70,6 @@ interface CycleEvents {
     otherReapproved: OtherItem[]
 }
 
-// Fire notifications for a cycle's events, honoring the notifyMode option: 'each'
-// (a notification per group) or 'summary' (a single digest).
 async function notifyCycle(e: CycleEvents): Promise<void> {
     if ((await getOptions()).notifyMode === 'summary') {
         notifySummary(e)
@@ -100,7 +99,6 @@ function notifySummary(e: CycleEvents): void {
     fireNotification(`summary-${Date.now()}`, APP_NAME, `${parts.join(' · ')} — ${detail}`, targets)
 }
 
-// "posts" / "comments" / "posts/comments" depending on the mix.
 function pluralNoun(items: NotifItem[]): string {
     return items.every(r => r.type === 'post')
         ? 'posts'
@@ -109,7 +107,6 @@ function pluralNoun(items: NotifItem[]): string {
           : 'posts/comments'
 }
 
-// Fire one notification and record what clicking it should open.
 function fireNotification(notifId: string, title: string, body: string, items: NotifItem[]) {
     createNotification({ notificationId: notifId, title, message: body })
     setNotifTargets(
@@ -142,7 +139,6 @@ function notifyReapprovals(reapproved: OwnItem[]) {
     fireNotification(`reapproved-${Date.now()}`, title, body, reapproved)
 }
 
-// Watched items (other users' posts/comments) get their own, clearly-attributed copy.
 function otherTargets(items: OtherItem[]): NotifItem[] {
     return items.map(w => ({ uuid: w.uuid, post_uuid: w.post_uuid, type: w.type }))
 }
@@ -167,11 +163,9 @@ function notifyOtherReapprovals(reapproved: OtherItem[]) {
     fireNotification(`watched-reapproved-${Date.now()}`, title, body, otherTargets(reapproved))
 }
 
-// Tell any open .win tabs to repaint highlights from the updated store.
-function refreshOpenTabs() {
-    chrome.tabs.query({ url: WIN_TABS }, tabs => {
-        for (const t of tabs) if (t.id != null) chrome.tabs.sendMessage(t.id, { action: 'refresh' }).catch(() => {})
-    })
+async function refreshOpenTabs() {
+    const tabs = await api.tabs.query({ url: WIN_TABS })
+    for (const t of tabs) if (t.id != null) api.tabs.sendMessage(t.id, { action: 'refresh' }).catch(() => {})
 }
 
 async function init() {
@@ -180,41 +174,43 @@ async function init() {
     setUnseenBadge(await getUnseenCount())
 }
 
-// On install/update the content script isn't in already-open .win tabs yet, so
-// inject it now (they capture the session and send set-auth). Returns how many.
 async function injectIntoOpenTabs(): Promise<number> {
-    if (!chrome.scripting?.executeScript) return 0 // MV3 only; Firefox MV2 waits for navigation
-    const tabs = await chrome.tabs.query({ url: WIN_TABS })
-    const open = tabs.filter(t => t.id != null)
-    for (const t of open) {
-        chrome.scripting.executeScript({ target: { tabId: t.id! }, files: ['src/content.js'] }).catch(() => {})
+    try {
+        if (!api.scripting?.executeScript) return 0
+        const tabs = await api.tabs.query({ url: WIN_TABS })
+        const open = tabs.filter(t => t.id != null)
+        for (const t of open) {
+            try { await api.scripting.executeScript({ target: { tabId: t.id! }, files: ['src/content.js'] }) } catch {}
+        }
+        return open.length
+    } catch {
+        return 0
     }
-    return open.length
 }
 
-chrome.runtime.onInstalled.addListener(async details => {
+api.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
+    dlog('onInstalled:', details.reason)
     await init()
-    const injected = await injectIntoOpenTabs() // connect via any already-open .win tab
+    const injected = await injectIntoOpenTabs()
+    dlog('injected content script into', injected, 'open .win tab(s)')
     if (await getAuth()) {
-        cycle() // session already captured — check right away
+        dlog('auth already stored — starting cycle')
+        cycle()
     } else if (details.reason === 'install' && injected === 0) {
-        // first install, nothing to connect through yet — onboard the user
-        chrome.tabs.create({ url: chrome.runtime.getURL('src/welcome.html') })
+        api.tabs.create({ url: 'https://patriots.win/' })
     }
 })
-chrome.runtime.onStartup.addListener(() => {
+api.runtime.onStartup.addListener(() => {
     init()
     cycle()
 })
 
-// Reliability: chrome.alarms persists across service-worker eviction, but ensure it
-// exists whenever the worker spins back up.
-chrome.alarms.get(ALARM_NAME).then(a => {
+api.alarms.get(ALARM_NAME).then(a => {
     if (!a) getOptions().then(o => setAlarm(o.interval || INTERVAL_DEFAULT))
 })
 
-// Alarm watchdog (cf. reveddit real-time): MV3 alarms can silently stop firing
-// (crbug 1316588). While the worker is alive, re-create the alarm if it goes quiet.
+injectIntoOpenTabs()
+
 async function alarmWatchdog() {
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -227,16 +223,15 @@ async function alarmWatchdog() {
 }
 alarmWatchdog()
 
-chrome.alarms.onAlarm.addListener(alarm => {
+api.alarms.onAlarm.addListener(alarm => {
     if (alarm.name === ALARM_NAME) {
-        setLastAlarm(Date.now()) // watchdog heartbeat
+        dlog('alarm fired — running cycle')
+        setLastAlarm(Date.now())
         cycle()
     }
 })
 
-// Clicking a notification opens the right place: one item → that item; several in
-// one thread → the thread; several across threads → the extension history page.
-chrome.notifications.onClicked.addListener(async notifId => {
+api.notifications.onClicked.addListener(async (notifId: string) => {
     const targets = await getNotifTargets(notifId)
     const origin = await getLastOrigin()
     let url: string
@@ -245,15 +240,15 @@ chrome.notifications.onClicked.addListener(async notifId => {
     } else if (targets.length > 1 && targets.every(t => t.post_uuid === targets[0].post_uuid)) {
         url = `${origin}/p/${targets[0].post_uuid}/`
     } else {
-        url = chrome.runtime.getURL('src/history.html')
+        url = api.runtime.getURL('src/history.html')
     }
     createTab(url)
-    chrome.notifications.clear(notifId)
+    api.notifications.clear(notifId)
     await markAllRemovedSeen()
     setUnseenBadge(0)
 })
 
-chrome.storage.onChanged.addListener((changes, area) => {
+api.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area === 'sync' && changes.options) {
         const interval = (changes.options.newValue as { interval?: number })?.interval || INTERVAL_DEFAULT
         setAlarm(interval)
@@ -269,8 +264,6 @@ type Message =
           >
       }
     | {
-          // the page sends only the ids; the background enriches author/title/text
-          // from the public thread via watchOtherFromPage
           action: 'watch-other'
           item: Pick<OtherItem, 'id' | 'uuid' | 'type' | 'post_id' | 'post_uuid'> & { watch_comments?: boolean }
       }
@@ -287,12 +280,13 @@ type Message =
     | { action: 'reconnect' }
     | { action: 'list-removed' }
 
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+api.runtime.onMessage.addListener((message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+    dlog('message received:', message.action)
     switch (message.action) {
         case 'watch-own':
             addOwnItem(message.comment).then(() => {
                 sendResponse({ ok: true })
-                setTimeout(cycle, 4000) // give the server a moment, then detect the new item
+                setTimeout(cycle, 4000)
             })
             return true
         case 'watch-other':
@@ -306,13 +300,13 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         case 'set-watch-comments':
             setWatchComments(message.id, message.watch_comments).then(() => {
                 sendResponse({ ok: true })
-                if (message.watch_comments) setTimeout(cycle, 1500) // pick up the comments soon
+                if (message.watch_comments) setTimeout(cycle, 1500)
             })
             return true
         case 'watch-source':
             addSource(message.kind, message.name).then(() => {
                 sendResponse({ ok: true })
-                cycle() // poll the new source right away
+                cycle()
             })
             return true
         case 'unwatch-source':
@@ -323,8 +317,9 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
             return true
         case 'set-auth':
             setAuth(message.auth).then(() => {
+                dlog('auth stored for', message.auth.user, '@', message.auth.origin)
                 sendResponse({ ok: true })
-                cycle() // we can now poll without a tab
+                cycle()
             })
             return true
         case 'check-now':
@@ -338,26 +333,23 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
             })
             return true
         case 'open-options':
-            chrome.runtime.openOptionsPage()
+            api.runtime.openOptionsPage()
             sendResponse({ ok: true })
             return true
         case 'get-auth-status':
             getAuth().then(a => sendResponse({ connected: !!a, user: a?.user || '' }))
             return true
         case 'reconnect':
-            // Re-capture the session: nudge any open .win tab to re-send its tokens;
-            // if none is open, open patriots.win so the user can connect.
-            chrome.tabs.query({ url: WIN_TABS }, tabs => {
+            api.tabs.query({ url: WIN_TABS }).then(tabs => {
                 const open = tabs.filter(t => t.id != null)
-                for (const t of open) chrome.tabs.sendMessage(t.id!, { action: 'send-auth-now' }).catch(() => {})
-                if (open.length === 0) chrome.tabs.create({ url: 'https://patriots.win/' })
+                for (const t of open) api.tabs.sendMessage(t.id!, { action: 'send-auth-now' }).catch(() => {})
+                if (open.length === 0) api.tabs.create({ url: 'https://patriots.win/' })
                 sendResponse({ ok: true, hadOpenTab: open.length > 0 })
             })
             return true
         case 'list-removed':
             getRemoved().then(map =>
                 sendResponse({
-                    // re-approved items are no longer removed → don't highlight them
                     removed: Object.values(map)
                         .filter(r => !r.reapproved_utc)
                         .map(r => ({
@@ -367,7 +359,6 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
                             community: r.community,
                             removal_source: r.removal_source,
                             hidden: r.hidden,
-                            // the recovered original text, so the page can show it back
                             text: r.text,
                             title: r.title,
                         })),
@@ -378,3 +369,6 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
             return false
     }
 })
+
+// Last line of the module: if this prints, every listener above registered.
+dlog('background started (v' + __VERSION__ + ', ' + __BUILT_FOR__ + ')')

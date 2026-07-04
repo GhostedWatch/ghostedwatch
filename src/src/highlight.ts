@@ -2,6 +2,7 @@
 // own posts/comments we know is removed, mark it visibly. A MutationObserver re-runs
 // the pass as the SPA navigates or the user clicks "load more comments".
 import { APP_NAME, NS } from './constants'
+import api from './api'
 
 // All injected class/attribute names derive from the NS prefix (DRY + distinctive).
 const C = {
@@ -104,7 +105,7 @@ function buildBanner(rec: RemovedLite): HTMLElement {
     tag.className = C.tag
     tag.textContent = APP_NAME
     attachTip(tag, `Shown by the ${APP_NAME} extension — click for options`)
-    tag.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'open-options' }))
+    tag.addEventListener('click', () => api.runtime.sendMessage({ action: 'open-options' }))
     banner.appendChild(tag)
 
     // always state "removed" explicitly

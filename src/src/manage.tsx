@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { getOtherItems, getSources, getLastOrigin, type OtherItem, type WatchSource } from './storage'
 import { sendMessage } from './ui-common'
 import { permalink } from './common'
+import api from './api'
 import { EyeMark } from './Ghost'
 
 const base = (origin?: string) => origin || 'https://patriots.win'
@@ -76,7 +77,7 @@ function ManagePage() {
                 <a
                     className="gw-bar-link"
                     href="#"
-                    onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('src/help.html') })}
+                    onClick={() => api.tabs.create({ url: api.runtime.getURL('src/help.html') })}
                 >
                     How watching works →
                 </a>

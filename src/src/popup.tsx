@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { getRemoved, getOwnItems, getLastOrigin, getLastCheck, type RemovedRecord } from './storage'
 import { sendMessage } from './ui-common'
 import { permalink } from './common'
+import api from './api'
 import { prettyAgo } from './time'
 import { EyeMark } from './Ghost'
 
@@ -31,7 +32,7 @@ function parsePage(url?: string): Page | null {
 const keyOf = (p: Page) => `${p.kind}:${p.name.toLowerCase()}`
 const pageLabel = (p: Page) => (p.kind === 'user' ? `u/${p.name}` : `c/${p.name}`)
 
-const openPage = (file: string) => chrome.tabs.create({ url: chrome.runtime.getURL(file), active: true })
+const openPage = (file: string) => api.tabs.create({ url: api.runtime.getURL(file), active: true })
 
 // A compact, scannable removal row (the popup keeps it terse; the history page has full detail).
 function RemovedRow({ rec, origin }: { rec: RemovedRecord; origin?: string }) {
@@ -80,7 +81,7 @@ function Popup() {
         setLastCheck(await getLastCheck())
         setOrigin(await getLastOrigin())
         await loadSources()
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        const [tab] = await api.tabs.query({ active: true, currentWindow: true })
         setPage(parsePage(tab?.url))
     }
 
@@ -141,7 +142,7 @@ function Popup() {
         { label: 'History', icon: '≡', go: () => openPage('src/history.html') },
         { label: 'Insights', icon: '◔', go: () => openPage('src/insights.html') },
         { label: 'Watching', icon: '☆', go: () => openPage('src/manage.html') },
-        { label: 'Options', icon: '⚙', go: () => chrome.runtime.openOptionsPage() },
+        { label: 'Options', icon: '⚙', go: () => api.runtime.openOptionsPage() },
     ]
 
     return (
@@ -157,7 +158,7 @@ function Popup() {
                 <button className="gw-iconbtn" title="Check now" onClick={checkNow} disabled={checking || !connected}>
                     {checking ? '…' : '⟳'}
                 </button>
-                <button className="gw-iconbtn" title="Settings" onClick={() => chrome.runtime.openOptionsPage()}>
+                <button className="gw-iconbtn" title="Settings" onClick={() => api.runtime.openOptionsPage()}>
                     ⚙
                 </button>
             </div>

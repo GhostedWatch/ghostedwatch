@@ -92,12 +92,46 @@ yarn test:e2e        # Playwright: loads the real built extension in Chromium an
 yarn e2e:login       # one-time: opens Chromium with the extension + a persistent
                      #   profile; log in by hand, press Enter to save the session.
                      #   Then: WIN_E2E_LIVE=1 yarn test:e2e   (runs logged-in tests)
-
+yarn test:firefox    # headless-Firefox smoke test over Marionette: installs the
+                     #   built dist-firefox as a temporary add-on and asserts the
+                     #   whole pipeline (background, alarm, content script on the
+                     #   live site, messaging, popup, auth). With WIN_USER/WIN_PASS
+                     #   in .env it also does a REAL login and asserts live session
+                     #   capture. Build with build-firefox-dev first (dev builds
+                     #   carry the data-gw-* breadcrumbs the test reads).
 ```
 
 Load unpacked: Chrome → `chrome://extensions` → Developer mode → Load unpacked →
 `dist-chrome/`. Firefox → `about:debugging` → Load Temporary Add-on → any file in
 `dist-firefox/`.
+
+## Release
+
+Tag a release to build + publish both stores via GitHub Actions (`release.yml`):
+
+```bash
+git tag v<version>   # must equal src/manifest.json "version"
+git push origin main --tags
+```
+
+One-time setup — repository secrets (Settings → Secrets → Actions):
+
+- **Chrome Web Store** (`CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
+  `CWS_REFRESH_TOKEN`): extension ID from the developer-dashboard listing URL; the
+  OAuth client (Desktop type) comes from a Google Cloud project with the
+  "Chrome Web Store API" enabled — see
+  https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md
+- **Firefox AMO** (`AMO_JWT_ISSUER`, `AMO_JWT_SECRET`): generate at
+  https://addons.mozilla.org/developers/addon/api/key/
+
+Publishing locally instead: set the same values as env vars
+(`EXTENSION_ID`/`CLIENT_ID`/`CLIENT_SECRET`/`REFRESH_TOKEN` for Chrome,
+`WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` for AMO), then
+`yarn build-chrome && yarn build-firefox && yarn publish:chrome && yarn publish:firefox`.
+
+`publish:firefox` also uploads `source.zip` (`git archive HEAD`) — AMO requires
+human-readable source for webpack-bundled submissions; reviewers rebuild with the
+steps in **Develop** above (Node 20, `yarn install`, `yarn build-firefox`).
 
 ## Verified against live data (throwaway test account)
 

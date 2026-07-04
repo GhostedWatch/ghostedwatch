@@ -18,6 +18,7 @@
 import { NS, APP_NAME, GHOST_PATH } from './constants'
 import { uuidToId } from './win-api'
 import { uuidFromHref, postUuidFromHref, attachTip, setTip, isRemovedUuid, closestBlock } from './highlight'
+import api from './api'
 import { getOptions } from './storage'
 
 const ACCENT = '#d93a00'
@@ -36,7 +37,7 @@ let watched = new Set<number>()
 let enabled = true // mirrors the `watchButtons` option
 
 function send<T = unknown>(msg: unknown): Promise<T> {
-    return new Promise(resolve => chrome.runtime.sendMessage(msg, resolve))
+    return api.runtime.sendMessage(msg)
 }
 
 const text = (el: Element) => (el.textContent || '').trim().toLowerCase()
@@ -260,7 +261,7 @@ export async function startWatchButtons(): Promise<void> {
     })
     observer.observe(document.documentElement, { childList: true, subtree: true })
     // react live to the options toggle
-    chrome.storage.onChanged.addListener((changes, area) => {
+    api.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
         if (area !== 'sync' || !changes.options) return
         enabled = (changes.options.newValue as { watchButtons?: boolean } | undefined)?.watchButtons !== false
         if (enabled) injectWatchButtons()
