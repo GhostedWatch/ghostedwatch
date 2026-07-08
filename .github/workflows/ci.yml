@@ -34,6 +34,7 @@ jobs:
 
       - name: E2E (real extension in headed Chromium via xvfb)
         run: |
+          yarn build-chrome-dev
           yarn playwright install --with-deps chromium
           xvfb-run -a yarn test:e2e
 
