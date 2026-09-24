@@ -29,7 +29,18 @@ const WIN_ORIGIN = process.env.WIN_ORIGIN || 'https://patriots.win'
 const WIN_USER = process.env.WIN_USER || ''
 const WIN_PASS = process.env.WIN_PASS || ''
 const FIREFOX = '/Applications/Firefox.app/Contents/MacOS/firefox'
-const PORT = 2828
+
+// A free port for this run's Marionette. Not the fixed default (2828): a Firefox
+// left over from an earlier run can still be listening there, and the probe would
+// silently drive that one instead, with its old session and storage.
+const PORT = await new Promise((resolve, reject) => {
+    const srv = net.createServer()
+    srv.on('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+        const { port } = srv.address()
+        srv.close(() => resolve(port))
+    })
+})
 
 if (!EXT_DIR || !fs.existsSync(EXT_DIR)) {
     console.error('extension dir missing:', EXT_DIR)
@@ -137,12 +148,23 @@ const cleanup = code => {
     try { fs.rmSync(profile, { recursive: true, force: true }) } catch {}
     process.exit(code)
 }
-process.on('SIGINT', () => cleanup(2))
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => cleanup(2))
 
 try {
     console.log('connecting to marionette...')
     const m = await connectMarionette()
     await m.send('WebDriver:NewSession', {})
+    // Make sure this is the Firefox we just launched (our fresh profile), not another
+    // instance that happens to have Marionette on the same port.
+    await m.send('Marionette:SetContext', { value: 'chrome' })
+    const profileInUse = (await m.send('WebDriver:ExecuteScript', {
+        script: 'return Services.dirsvc.get("ProfD", Ci.nsIFile).path',
+        args: [],
+    })).value
+    await m.send('Marionette:SetContext', { value: 'content' })
+    if (fs.realpathSync(profileInUse) !== fs.realpathSync(profile)) {
+        throw new Error(`connected to a different Firefox (profile ${profileInUse}), not the one this run launched`)
+    }
     console.log('session up; installing temporary add-on from', EXT_DIR)
     const inst = await m.send('Addon:Install', { path: path.resolve(EXT_DIR), temporary: true })
     console.log('installed:', JSON.stringify(inst))
