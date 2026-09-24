@@ -886,6 +886,31 @@ a.wrow-title:hover {
     background: var(--hairline);
     color: var(--ink);
 }
+/* "Your account" when not logged in: amber like the popup's disconnected state */
+.wrow-bar.warn {
+    background: var(--warn-fg);
+}
+.wrow-type.warn {
+    color: var(--warn-fg);
+}
+.wrow-note {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--ink);
+}
+.wrow-cta {
+    flex: none;
+    padding: 8px 13px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+.wrow-cta:hover {
+    text-decoration: none;
+    filter: brightness(1.06);
+}
 
 /* one removal card (history) */
 .hcard {

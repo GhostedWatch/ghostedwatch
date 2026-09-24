@@ -130,6 +130,34 @@ test('watching page: groups by type and shows the in-row All-comments toggle', a
     await expect(page.getByRole('switch')).toBeVisible() // the All-comments toggle (on)
 })
 
+test('watching page: lists your own account when connected', async ({ context, extensionId }) => {
+    const page = await seed(context, extensionId, {
+        auth,
+        last_origin: 'https://patriots.win',
+        own_items: { 1: {}, 2: {}, 3: {} },
+        last_check: Date.now() - 2 * 60000,
+    })
+    await page.goto(url(extensionId, 'manage.html'))
+    await expect(page.getByText('Your account')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'u/gw_tester' })).toHaveAttribute('href', 'https://patriots.win/u/gw_tester')
+    await expect(page.getByText(/3 tracked · checked 2m ago/)).toBeVisible()
+    await expect(page.getByText(/To also watch someone else/)).toBeVisible()
+    await expect(page.getByText('Not connected')).toHaveCount(0)
+})
+
+test('watching page: not connected → points to the site to log in', async ({ context, extensionId }) => {
+    const page = await context.newPage()
+    await page.goto(url(extensionId, 'manage.html'))
+    await expect(page.getByText('Not connected')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Open patriots.win to log in' })).toHaveAttribute('href', 'https://patriots.win/')
+    await expect(page.getByText(/No login needed to watch other people/)).toBeVisible()
+
+    // logging in (the content script storing the session) flips the page live
+    await page.evaluate(a => new Promise(r => chrome.storage.local.set({ auth: a }, () => r(1))), auth)
+    await expect(page.getByRole('link', { name: 'u/gw_tester' })).toBeVisible()
+    await expect(page.getByText('Not connected')).toHaveCount(0)
+})
+
 test('help page renders the guide + the Hidden caveat', async ({ context, extensionId }) => {
     const page = await context.newPage()
     await page.goto(url(extensionId, 'help.html'))

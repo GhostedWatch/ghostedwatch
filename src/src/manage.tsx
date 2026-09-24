@@ -1,12 +1,35 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getOtherItems, getSources, getLastOrigin, type OtherItem, type WatchSource } from './storage'
+import {
+    getAuth,
+    getOwnItems,
+    getLastCheck,
+    getOtherItems,
+    getSources,
+    getLastOrigin,
+    type Auth,
+    type OtherItem,
+    type WatchSource,
+} from './storage'
 import { sendMessage } from './ui-common'
 import { permalink } from './common'
+import { APP_NAME } from './constants'
 import api from './api'
+import { prettyAgo } from './time'
 import { EyeMark } from './Ghost'
 
 const base = (origin?: string) => origin || 'https://patriots.win'
+
+// storage keys this page shows; a change to any of them re-renders it live (e.g. the
+// login captured in another tab, a finished check, a new watch)
+const SHOWN_KEYS = ['auth', 'own_items', 'last_check', 'other_items', 'watch_sources', 'last_origin']
+
+// Your own account, watched automatically while you're logged in.
+interface Account {
+    auth: Auth | null
+    tracked: number // how many of your own posts/comments are being checked
+    lastCheck: number
+}
 
 function Toggle({ on, onClick, title }: { on: boolean; onClick: () => void; title?: string }) {
     return (
@@ -22,15 +45,54 @@ function Toggle({ on, onClick, title }: { on: boolean; onClick: () => void; titl
     )
 }
 
-function Section({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+function Section({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
     return (
         <>
             <div className="gw-sec">
                 <span className="gw-sec-label">{label}</span>
-                <span className="gw-sec-count">{count}</span>
+                {count !== undefined ? <span className="gw-sec-count">{count}</span> : null}
             </div>
             <div className="gw-list">{children}</div>
         </>
+    )
+}
+
+// Your own account first: it's always watched once you're logged in. Without a login,
+// point to the site instead (that's where the session gets picked up).
+function AccountRow({ account, origin }: { account: Account; origin?: string }) {
+    const { auth, tracked, lastCheck } = account
+    if (!auth) {
+        const site = base(origin)
+        return (
+            <div className="wrow">
+                <div className="wrow-bar warn" />
+                <div className="wrow-main">
+                    <div className="wrow-type warn">Not connected</div>
+                    <div className="wrow-note">
+                        Log in on a .win site and {APP_NAME} watches your own posts and comments automatically.
+                    </div>
+                </div>
+                <a className="wrow-cta" href={`${site}/`} target="_blank" rel="noreferrer">
+                    Open {new URL(site).host} to log in
+                </a>
+            </div>
+        )
+    }
+    return (
+        <div className="wrow">
+            <div className="wrow-bar" />
+            <div className="wrow-main">
+                <div className="wrow-type">You</div>
+                <a className="wrow-title" href={`${auth.origin}/u/${auth.user}`} target="_blank" rel="noreferrer">
+                    u/{auth.user}
+                </a>
+                <div className="wrow-sub">
+                    Your posts &amp; comments · {tracked} tracked
+                    {lastCheck ? ` · checked ${prettyAgo(lastCheck)}` : ''}
+                </div>
+            </div>
+            <span className="wrow-pill">Automatic</span>
+        </div>
     )
 }
 
@@ -39,14 +101,25 @@ function ManagePage() {
     const [items, setItems] = useState<OtherItem[]>([])
     const [sources, setSources] = useState<WatchSource[]>([])
     const [origin, setOrigin] = useState<string>()
+    const [account, setAccount] = useState<Account | null>(null) // null until first loaded
 
     const load = async () => {
         setItems(Object.values(await getOtherItems()).filter(w => !w.auto))
         setSources(Object.values(await getSources()))
         setOrigin(await getLastOrigin())
+        setAccount({
+            auth: await getAuth(),
+            tracked: Object.keys(await getOwnItems()).length,
+            lastCheck: await getLastCheck(),
+        })
     }
     useEffect(() => {
         load()
+        const onChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+            if (area === 'local' && SHOWN_KEYS.some(k => k in changes)) load()
+        }
+        api.storage.onChanged.addListener(onChanged)
+        return () => api.storage.onChanged.removeListener(onChanged)
     }, [])
 
     const unwatchItem = async (id: number) => {
@@ -84,10 +157,18 @@ function ManagePage() {
             </div>
 
             <div className="gw-page2">
-                {nothing && (
+                {account && (
+                    <Section label="Your account">
+                        <AccountRow account={account} origin={origin} />
+                    </Section>
+                )}
+                {account && nothing && (
                     <p className="muted">
-                        You're not watching anyone else's content yet. Use the Watch button on a post or comment, or
-                        watch a user/community from the popup. (Your own content is watched automatically.)
+                        {account.auth
+                            ? 'To also watch someone else, use the Watch button on any post or comment, or open a ' +
+                              "user's or community's page and watch it from the popup."
+                            : 'No login needed to watch other people: use the Watch button on any post or comment, ' +
+                              "or open a user's or community's page and watch it from the popup."}
                     </p>
                 )}
 
