@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { uuidFromHref, postUuidFromHref, childContaining } from '../highlight'
+import { uuidFromHref, postUuidFromHref, childContaining, showsOriginal } from '../highlight'
 
 // Build a fake node tree (only parentElement is walked) mirroring the real .win
 // comment block: a flex row [vote | body | .child reply], where body holds the
@@ -69,5 +69,32 @@ describe('postUuidFromHref (post uuid)', () => {
     })
     it('returns null when there is no post segment', () => {
         expect(postUuidFromHref('/c/SomeCommunity')).toBeNull()
+    })
+})
+
+// Decides whether the "Restored text" box is needed: not when the page already shows
+// the original (the logged-in author still sees their own removed content).
+describe('showsOriginal (is the saved text already on the page?)', () => {
+    it('finds the text the logged-in author still sees', () => {
+        expect(showsOriginal('someuser 1 points 3 months ago this is what I said permalink save', 'this is what I said')).toBe(true)
+    })
+    it('ignores markdown rendering, punctuation and whitespace', () => {
+        expect(
+            showsOriginal(
+                'someuser  I really mean it — see the docs here.  permalink',
+                'I **really** mean it - see [the docs](https://example.com/docs) here',
+            ),
+        ).toBe(true)
+    })
+    it('is false when the page shows the placeholder instead', () => {
+        expect(showsOriginal('someuser Comment removed by community filter. permalink', 'this is what I said')).toBe(false)
+    })
+    it('matches a long text by its opening (the page may cut it short)', () => {
+        const long = 'a fairly long removed comment that goes on and on '.repeat(10)
+        expect(showsOriginal(`someuser ${long.slice(0, 120)}… read more`, long)).toBe(true)
+    })
+    it('never counts an empty or symbols-only original as shown', () => {
+        expect(showsOriginal('anything at all', '')).toBe(false)
+        expect(showsOriginal('anything at all !!!', '!!! …')).toBe(false)
     })
 })

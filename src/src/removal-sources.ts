@@ -75,3 +75,12 @@ export function removalSourceTooltip(source: string | undefined, type: ItemType)
     const note = lookup(source)?.note
     return `${note ? `${note} ` : ''}The site shows it to others as “${siteRemovalText(source, type)}”`
 }
+
+// Is this the site's placeholder for a removed item? The element carries no class or
+// attribute to key off, and the wording varies (siteRemovalText above), but it always
+// starts with "Comment removed" / "Post removed", so match that stable prefix. A
+// user's own deletion ("… deleted by the user.") isn't a removal.
+const PLACEHOLDER_RE = /^\s*(comment|post) removed\b/i
+export function isRemovalPlaceholder(text: string): boolean {
+    return PLACEHOLDER_RE.test(text)
+}

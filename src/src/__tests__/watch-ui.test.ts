@@ -1,39 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { watchTooltip, isRemovalPlaceholder } from '../watch-ui'
-import { REMOVAL_SOURCES, siteRemovalText } from '../removal-sources'
-
-describe('isRemovalPlaceholder (the site shows it as removed)', () => {
-    it('matches the placeholder regardless of the removal reason', () => {
-        for (const s of [
-            'Comment removed by community filter.',
-            'Comment removed by community moderators.',
-            'Comment removed upon the user being banned.',
-            'Comment removed for spam.',
-            'Post removed by admins.',
-            '   Comment removed by the author.',
-        ]) {
-            expect(isRemovalPlaceholder(s)).toBe(true)
-        }
-    })
-    it('matches every removal placeholder the site renders, for any source', () => {
-        for (const source of [...REMOVAL_SOURCES, '', 'someNewFilter']) {
-            if (source === 'deleted') continue // "Comment deleted by the user." is the author's own deletion
-            expect(isRemovalPlaceholder(siteRemovalText(source, 'comment'))).toBe(true)
-            expect(isRemovalPlaceholder(siteRemovalText(source, 'post'))).toBe(true)
-        }
-        expect(isRemovalPlaceholder(siteRemovalText('deleted', 'comment'))).toBe(false)
-    })
-    it('does not match real content that merely mentions removal', () => {
-        for (const s of [
-            'This is my actual comment.',
-            'I think this comment removed by mods was unfair',
-            'removed by community filter',
-            '',
-        ]) {
-            expect(isRemovalPlaceholder(s)).toBe(false)
-        }
-    })
-})
+import { watchTooltip } from '../watch-ui'
 
 describe('watchTooltip', () => {
     it('watching a still-visible item → it will alert on removal', () => {

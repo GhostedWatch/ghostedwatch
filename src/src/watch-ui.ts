@@ -20,6 +20,7 @@ import { uuidToId } from './win-api'
 import { uuidFromHref, postUuidFromHref, attachTip, setTip, isRemovedUuid, closestBlock } from './highlight'
 import api, { extensionAlive } from './api'
 import { getOptions } from './storage'
+import { isRemovalPlaceholder } from './removal-sources'
 
 const ACCENT = '#d93a00'
 const BTN = `${NS}-watch`
@@ -55,15 +56,6 @@ export function watchTooltip(on: boolean, type: string, removed: boolean): strin
         : `Watch this ${type} — ${APP_NAME} will alert you if it's ${fate}.`
 }
 
-// The site replaces a removed item's body with a placeholder. The exact message
-// varies ("…by community filter.", "…upon the user being banned.", …; the full list
-// is siteRemovalText in removal-sources.ts) but always starts with "Comment removed" /
-// "Post removed", and the block carries no class or attribute to key off — so we
-// match that stable prefix.
-const PLACEHOLDER_RE = /^\s*(comment|post) removed\b/i
-export function isRemovalPlaceholder(text: string): boolean {
-    return PLACEHOLDER_RE.test(text)
-}
 // Does the comment hosting this action bar currently show a removal placeholder?
 // Scans the body column's own children (nested replies are separate sibling columns,
 // so they're excluded) — purely from the rendered DOM, no extra request.

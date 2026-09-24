@@ -3,7 +3,7 @@
 // the pass as the SPA navigates or the user clicks "load more comments".
 import { APP_NAME, NS } from './constants'
 import api, { extensionAlive } from './api'
-import { isKnownRemovalSource, removalSourceLabel, removalSourceTooltip } from './removal-sources'
+import { isKnownRemovalSource, isRemovalPlaceholder, removalSourceLabel, removalSourceTooltip } from './removal-sources'
 
 // All injected class/attribute names derive from the NS prefix (DRY + distinctive).
 const C = {
@@ -140,6 +140,15 @@ function buildRecovered(text: string): HTMLElement {
     return box
 }
 
+// Is `original` already on the page (somewhere in `pageText`)? Compares letters and
+// digits only, so markdown rendering (emphasis, quotes, [link](url) → "link"),
+// whitespace and punctuation don't matter; a long text only has to match its opening.
+export function showsOriginal(pageText: string, original: string): boolean {
+    const squash = (s: string) => s.replace(/\]\([^)]*\)/g, '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+    const want = squash(original).slice(0, 80)
+    return want !== '' && squash(pageText).includes(want)
+}
+
 // A custom tooltip — white-on-black, larger text, appears instantly (the native
 // HTML title tooltip is slow, small and low-contrast). The text is stored per
 // element so it can change after wiring (e.g. Watch → Watching) via setTip.
@@ -217,19 +226,49 @@ function mark(block: HTMLElement, anchor: Element, rec: RemovedLite, uuid: strin
     // column only. A post block is vertical and has no nested-reply siblings → it is
     // its own content, so outline the block.
     const target = (blockIsRow && childContaining(block, anchor)) || block
-    if (target.querySelector(`.${C.banner}`) || target.classList.contains(C.removed)) return // dedupe
-    target.setAttribute(DATA_ATTR, uuid)
-    target.classList.add(C.removed)
-    target.insertBefore(buildBanner(rec), target.firstChild)
+    if (!target.querySelector(`.${C.banner}`) && !target.classList.contains(C.removed)) {
+        target.setAttribute(DATA_ATTR, uuid)
+        target.classList.add(C.removed)
+        target.insertBefore(buildBanner(rec), target.firstChild)
+    }
+    syncRestored(target, anchor, rec)
+}
 
-    // Show the recovered original text back on the page, just below the site's
-    // "removed" placeholder (i.e. above the action row), when we have it.
-    const recovered = rec.type === 'post' ? rec.title : rec.text
-    if (recovered && !target.querySelector(`.${C.recovered}`)) {
-        const box = buildRecovered(recovered)
+// What we add to a marked item; it isn't part of the page's own content.
+const OURS = `.${C.banner}, .${C.recovered}, .${NS}-watch`
+
+// The text the page itself shows inside `target`.
+function pageText(target: HTMLElement): string {
+    let text = ''
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.parentElement?.closest(OURS)) text += ' ' + n.nodeValue
+    }
+    return text
+}
+
+// Does the page show the site's "… removed" placeholder inside `target`?
+function showsPlaceholder(target: HTMLElement): boolean {
+    return Array.from(target.querySelectorAll('*')).some(
+        el => !el.closest(OURS) && isRemovalPlaceholder(el.textContent || ''),
+    )
+}
+
+// Show the saved original just below the site's "removed" placeholder (above the
+// action row), but only while the page isn't showing it itself: logged in, the author
+// still sees their own removed content, and it's others (or a view the site blanks)
+// who get the placeholder. Re-checked on every pass, as the SPA can fill content in later.
+function syncRestored(target: HTMLElement, anchor: Element, rec: RemovedLite): void {
+    const original = (rec.type === 'post' ? rec.title : rec.text) || ''
+    const needed = original !== '' && (showsPlaceholder(target) || !showsOriginal(pageText(target), original))
+    const box = target.querySelector(`.${C.recovered}`)
+    if (needed && !box) {
+        const restored = buildRecovered(original)
         const actions = childContaining(target, anchor) // the action row holding the permalink
-        if (actions) target.insertBefore(box, actions)
-        else target.appendChild(box)
+        if (actions) target.insertBefore(restored, actions)
+        else target.appendChild(restored)
+    } else if (!needed && box) {
+        box.remove()
     }
 }
 
