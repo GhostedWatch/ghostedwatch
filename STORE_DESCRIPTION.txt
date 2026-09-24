@@ -25,7 +25,7 @@ Made in America 🇺🇸 · Independent and private by design.
 
 VERSION HISTORY:
 0.0.5
-Clearer removal labels — the in-page banner, History, Insights and exports now name the actual source (spam filter, politics filter, risk filter, content policy, pending review…), and hovering a label shows exactly what other users see in its place.
+Removal labels now show the actual source, such as spam filter or risk filter.
 
 0.0.4
 Added the dedicated community domains: kotakuinaction2.win, greatawakening.win, conspiracies.win, omegacanada.win. Connect and see removal highlights on those sites just like patriots.win and scored.co.
