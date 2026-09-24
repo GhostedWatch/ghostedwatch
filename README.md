@@ -135,6 +135,10 @@ yarn publish:firefox:text  # only push STORE_DESCRIPTION.txt to the AMO listing
 
 `preflight` (run by every publish command) is typecheck + unit tests + Chromium
 e2e against the dev build + the headless-Firefox live probe (`test:firefox`).
+Once it passes, the same code skips it for 24 hours (the key hashes every
+tracked or untracked-but-not-ignored file plus the test settings), so retrying
+a publish that failed for another reason starts right away;
+`PREFLIGHT_FORCE=1` runs it anyway.
 Dev builds go to `dist-*-dev/`, prod to `dist-*/` — and the publish scripts each
 rebuild their production artifact right before uploading, so nothing stale (or
 dev) can end up in a store submission.
