@@ -90,7 +90,9 @@ yarn build-chrome-dev   # DEV -> dist-chrome-dev/   (debug breadcrumbs, inline m
 yarn build-firefox-dev  # DEV -> dist-firefox-dev/  — dev and prod never share a dir,
                         #   so a dev build can't be shipped by mistake
 yarn test:e2e        # Playwright: loads the real built extension in Chromium and
-                     #   checks the popup/options/history pages.
+                     #   checks the popup/options/history pages. Runs headless (no
+                     #   window); WIN_E2E_HEADED=1 shows the browser. Live-site runs
+                     #   (WIN_E2E_LIVE / WIN_E2E_NET) stay headed.
                      #   First time: `yarn playwright install chromium`.
 yarn e2e:login       # one-time: opens Chromium with the extension + a persistent
                      #   profile; log in by hand, press Enter to save the session.

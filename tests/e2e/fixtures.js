@@ -43,11 +43,18 @@ export const launchArgs = [
 ]
 export { extensionPath }
 
+// No window by default: the `chromium` channel runs Chromium's new headless mode, which
+// (unlike the default headless shell) loads extensions. Runs against the live site stay
+// headed, since its bot checks are more likely to flag a headless browser.
+// WIN_E2E_HEADED=1 shows the window for any run.
+const headed = !!(process.env.WIN_E2E_HEADED || process.env.WIN_E2E_LIVE || process.env.WIN_E2E_NET)
+
 export const test = base.extend({
     // eslint-disable-next-line no-empty-pattern
     context: async ({}, use) => {
         const context = await chromium.launchPersistentContext(profileDir, {
-            headless: false, // extensions require a headed (or new-headless) context
+            channel: 'chromium',
+            headless: !headed,
             args: launchArgs,
         })
         await use(context)
