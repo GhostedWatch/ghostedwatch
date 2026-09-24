@@ -174,12 +174,17 @@ async function init() {
     setUnseenBadge(await getUnseenCount())
 }
 
+// Give every open .win tab a live content script: tabs that were open before an
+// install/update (their old copy died with the old version) or before the extension
+// was enabled. Tabs whose copy answers a ping are skipped. Returns how many .win tabs
+// are open.
 async function injectIntoOpenTabs(): Promise<number> {
     try {
         if (!api.scripting?.executeScript) return 0
         const tabs = await api.tabs.query({ url: WIN_TABS })
         const open = tabs.filter(t => t.id != null)
         for (const t of open) {
+            if (await hasLiveContentScript(t.id!)) continue
             try { await api.scripting.executeScript({ target: { tabId: t.id! }, files: ['src/content.js'] }) } catch {}
         }
         return open.length
@@ -188,15 +193,23 @@ async function injectIntoOpenTabs(): Promise<number> {
     }
 }
 
+async function hasLiveContentScript(tabId: number): Promise<boolean> {
+    try {
+        return (await api.tabs.sendMessage(tabId, { action: 'ping' }))?.ok === true
+    } catch {
+        return false // no receiver: never injected, or only a dead copy from before an update
+    }
+}
+
 api.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
     dlog('onInstalled:', details.reason)
     await init()
-    const injected = await injectIntoOpenTabs()
-    dlog('injected content script into', injected, 'open .win tab(s)')
+    const winTabs = await injectIntoOpenTabs()
+    dlog('content script live in', winTabs, 'open .win tab(s)')
     if (await getAuth()) {
         dlog('auth already stored — starting cycle')
         cycle()
-    } else if (details.reason === 'install' && injected === 0) {
+    } else if (details.reason === 'install' && winTabs === 0) {
         api.tabs.create({ url: 'https://patriots.win/' })
     }
 })
@@ -209,6 +222,9 @@ api.alarms.get(ALARM_NAME).then(a => {
     if (!a) getOptions().then(o => setAlarm(o.interval || INTERVAL_DEFAULT))
 })
 
+// Runs on every service-worker start, which MV3 does about once a minute (the alarm
+// wakes a stopped worker). That's the only hook for "extension just enabled", and
+// tabs that already have a live copy are skipped, so re-running it is cheap.
 injectIntoOpenTabs()
 
 async function alarmWatchdog() {

@@ -1,5 +1,5 @@
 import { MSG_SOURCE } from './constants'
-import api from './api'
+import api, { extensionAlive } from './api'
 import { setRemovedSet, startHighlighting, type RemovedLite } from './highlight'
 import { startWatchButtons } from './watch-ui'
 
@@ -13,6 +13,14 @@ const stamp = (k: string, v: string) => { if (__DEV__) document.documentElement.
 main()
 
 function main() {
+    // One live copy per tab. A tab gets this script from the manifest and from the
+    // background's injectIntoOpenTabs(), so a second run here must not stack another
+    // set of listeners, observers and timers. A copy left behind by an extension update
+    // is dead (its runtime is gone): it doesn't count, and this copy takes over.
+    const tab = window as unknown as { __ghostedwatchAlive?: () => boolean }
+    if (tab.__ghostedwatchAlive?.()) return
+    tab.__ghostedwatchAlive = extensionAlive
+
     dlog('content script injected on', location.href)
     stamp('cs', 'injected')
     function injectPageScript() {
@@ -23,7 +31,7 @@ function main() {
     }
 
     window.addEventListener('message', event => {
-        if (event.source !== window) return
+        if (event.source !== window || !extensionAlive()) return
         const data = event.data
         if (!data || data.source !== MSG_SOURCE) return
         if (data.type === 'created-comment' || data.type === 'created-post') {
@@ -109,8 +117,10 @@ function main() {
         }
     }
 
-    api.runtime.onMessage.addListener(msg => {
-        if (msg?.action === 'refresh') refreshHighlights()
+    api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+        // 'ping' lets the background skip tabs that already have a live copy
+        if (msg?.action === 'ping') sendResponse({ ok: true })
+        else if (msg?.action === 'refresh') refreshHighlights()
         else if (msg?.action === 'send-auth-now') sendAuth()
     })
 
@@ -119,5 +129,6 @@ function main() {
     startWatchButtons()
     refreshHighlights()
     captureLoop()
-    setInterval(sendAuth, 5 * 60 * 1000)
+    // a copy orphaned by an extension update stops re-checking the session
+    const authTimer = setInterval(() => (extensionAlive() ? sendAuth() : clearInterval(authTimer)), 5 * 60 * 1000)
 }

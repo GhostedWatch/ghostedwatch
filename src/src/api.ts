@@ -19,3 +19,14 @@ export default new Proxy({} as typeof chrome, {
         return (getApi() as any)[prop]
     },
 })
+
+// Is this script's extension still running? False for a content script left behind
+// in a tab by an extension update or reload: its runtime is gone (Chrome clears
+// runtime.id; Firefox may throw instead).
+export function extensionAlive(): boolean {
+    try {
+        return !!getApi().runtime?.id
+    } catch {
+        return false
+    }
+}

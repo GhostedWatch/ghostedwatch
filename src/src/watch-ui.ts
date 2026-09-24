@@ -18,7 +18,7 @@
 import { NS, APP_NAME, GHOST_PATH } from './constants'
 import { uuidToId } from './win-api'
 import { uuidFromHref, postUuidFromHref, attachTip, setTip, isRemovedUuid, closestBlock } from './highlight'
-import api from './api'
+import api, { extensionAlive } from './api'
 import { getOptions } from './storage'
 
 const ACCENT = '#d93a00'
@@ -253,12 +253,19 @@ export async function startWatchButtons(): Promise<void> {
     enabled = (await getOptions()).watchButtons !== false
     const resp = await send<{ ids?: number[] }>({ action: 'list-other' })
     watched = new Set(resp?.ids || [])
+    // buttons already here were left by a copy orphaned by an extension update, and
+    // their clicks go nowhere: replace them
+    removeAllButtons()
     injectWatchButtons()
     if (observer) return
     let t: ReturnType<typeof setTimeout>
     observer = new MutationObserver(() => {
         clearTimeout(t)
-        t = setTimeout(injectWatchButtons, 300)
+        t = setTimeout(() => {
+            // after an extension update the new copy owns the page; this one stops
+            if (extensionAlive()) injectWatchButtons()
+            else observer?.disconnect()
+        }, 300)
     })
     observer.observe(document.documentElement, { childList: true, subtree: true })
     // react live to the options toggle

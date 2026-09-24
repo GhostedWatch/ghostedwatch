@@ -2,7 +2,7 @@
 // own posts/comments we know is removed, mark it visibly. A MutationObserver re-runs
 // the pass as the SPA navigates or the user clicks "load more comments".
 import { APP_NAME, NS } from './constants'
-import api from './api'
+import api, { extensionAlive } from './api'
 import { isKnownRemovalSource, removalSourceLabel, removalSourceTooltip } from './removal-sources'
 
 // All injected class/attribute names derive from the NS prefix (DRY + distinctive).
@@ -195,6 +195,17 @@ function cleanupBanners(): void {
     })
 }
 
+// Drop every mark on the page. Any present when a copy starts were left by a copy
+// orphaned by an extension update, and their click/tooltip handlers are dead.
+function clearMarks(): void {
+    document.querySelectorAll<HTMLElement>(`[${DATA_ATTR}]`).forEach(target => {
+        target.removeAttribute(DATA_ATTR)
+        target.classList.remove(C.removed)
+        target.querySelector(`.${C.banner}`)?.remove()
+        target.querySelector(`.${C.recovered}`)?.remove()
+    })
+}
+
 // Mark one matched anchor's removed item. We outline and host the banner on the
 // item's own content column (not the whole comment block), so the box surrounds
 // only the removed content — never its nested replies. The banner lives inside the
@@ -282,10 +293,15 @@ function injectStyles(): void {
 export function startHighlighting(): void {
     injectStyles()
     if (observer) return
+    clearMarks()
     let t: ReturnType<typeof setTimeout>
     observer = new MutationObserver(() => {
         clearTimeout(t)
-        t = setTimeout(markComments, 300)
+        t = setTimeout(() => {
+            // after an extension update the new copy owns the page; this one stops
+            if (extensionAlive()) markComments()
+            else observer?.disconnect()
+        }, 300)
     })
     observer.observe(document.documentElement, { childList: true, subtree: true })
 }
