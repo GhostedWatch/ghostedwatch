@@ -1,8 +1,11 @@
 GhostedWatch tells you when your own posts and comments on the .win communities
 (patriots.win / scored.co / kotakuinaction2.win / greatawakening.win /
-conspiracies.win / omegacanada.win) have been removed — including
-the kind of removal where you still see your content but everyone else sees a
-"removed by community filter" placeholder.
+conspiracies.win / omegacanada.win) have been removed or shadowbanned — including
+the kind of removal where you still see your content but everyone else sees
+"Comment removed by community filter", "Comment removed by community moderators",
+or "Comment removed upon the user being banned".
+
+Not sure what a removal message means? Plain-English guides: ghostedwatch.com/guides
 
 Features:
 
