@@ -1,9 +1,7 @@
-GhostedWatch tells you when your own posts and comments on the .win communities
-(patriots.win / scored.co / kotakuinaction2.win / greatawakening.win /
-conspiracies.win / omegacanada.win) have been removed or shadowbanned — including
-the kind of removal where you still see your content but everyone else sees
-"Comment removed by community filter", "Comment removed by community moderators",
-or "Comment removed upon the user being banned".
+GhostedWatch tells you when your own posts and comments on patriots.win, scored.co
+and the other .win communities have been removed or shadowbanned — including the
+kind of removal where you still see your content but everyone else sees a
+placeholder like "Comment removed by community filter".
 
 Not sure what a removal message means? Plain-English guides: ghostedwatch.com/guides
 
@@ -28,7 +26,7 @@ VERSION HISTORY:
 Removal labels now show the actual source, such as spam filter or risk filter.
 
 0.0.4
-Added the dedicated community domains: kotakuinaction2.win, greatawakening.win, conspiracies.win, omegacanada.win. Connect and see removal highlights on those sites just like patriots.win and scored.co.
+Added the other dedicated .win community sites: connect and see removal highlights there too.
 
 0.0.3
 Reliability fixes — monitoring now connects dependably, and already-open .win tabs are connected immediately on install/update/startup.
