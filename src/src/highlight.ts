@@ -3,6 +3,7 @@
 // the pass as the SPA navigates or the user clicks "load more comments".
 import { APP_NAME, NS } from './constants'
 import api from './api'
+import { isKnownRemovalSource, removalSourceLabel, removalSourceTooltip } from './removal-sources'
 
 // All injected class/attribute names derive from the NS prefix (DRY + distinctive).
 const C = {
@@ -87,16 +88,6 @@ export function childContaining(parent: Element, descendant: Element): HTMLEleme
     return n && n.parentElement === parent ? (n as HTMLElement) : null
 }
 
-// Friendly label for a known removal source, or null if we don't recognize it.
-function sourceLabel(source: string): string | null {
-    const s = (source || '').toLowerCase()
-    if (s.includes('filter')) return 'community filter'
-    if (s === 'moderator') return 'moderator'
-    if (s === 'nuke') return 'nuke'
-    if (s === 'admin') return 'admin'
-    return null
-}
-
 function buildBanner(rec: RemovedLite): HTMLElement {
     const banner = document.createElement('div')
     banner.className = C.banner
@@ -115,12 +106,11 @@ function buildBanner(rec: RemovedLite): HTMLElement {
     banner.appendChild(word)
 
     // who/how, when the site told us a recognizable source
-    const label = sourceLabel(rec.removal_source)
-    if (label) {
+    if (isKnownRemovalSource(rec.removal_source)) {
         const pill = document.createElement('span')
         pill.className = C.pill
-        pill.textContent = label
-        attachTip(pill, `The site reported this as removed by the ${label}.`)
+        pill.textContent = removalSourceLabel(rec.removal_source)
+        attachTip(pill, removalSourceTooltip(rec.removal_source, rec.type))
         banner.appendChild(pill)
     }
 

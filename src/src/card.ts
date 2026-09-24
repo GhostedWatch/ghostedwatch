@@ -1,5 +1,5 @@
 import type { RemovedRecord } from './storage'
-import { removalSourceLabel } from './stats'
+import { removalSourceLabel } from './removal-sources'
 import { GHOST_PATH } from './constants'
 import { fullTimestamp } from './time'
 

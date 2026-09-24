@@ -5,6 +5,7 @@ import { permalink } from './common'
 import { prettyAgo, prettyDuration, fullTimestamp } from './time'
 import { Tooltip } from './Tooltip'
 import { downloadCard } from './card'
+import { removalSourceLabel, removalSourceTooltip } from './removal-sources'
 
 const userUrl = (origin: string | undefined, name: string) => `${origin || 'https://patriots.win'}/u/${name}`
 const commUrl = (origin: string | undefined, name: string) => `${origin || 'https://patriots.win'}/c/${name}`
@@ -74,7 +75,10 @@ export function RemovedItemView({
                 <div className="hcard-foot">
                     {rec.removal_source ? (
                         <span>
-                            removed by <span className="src">{rec.removal_source}</span>
+                            removed by{' '}
+                            <Tooltip text={removalSourceTooltip(rec.removal_source, rec.type)}>
+                                <span className="src">{removalSourceLabel(rec.removal_source)}</span>
+                            </Tooltip>
                         </span>
                     ) : null}
                     <Tooltip text={observed}>

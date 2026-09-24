@@ -1,4 +1,5 @@
 import type { RemovedRecord } from './storage'
+import { removalSourceLabel } from './removal-sources'
 
 // Pure aggregation over the removal log, so the insights view stays unit-testable and
 // free of storage/DOM. `now` is injectable for deterministic day-bucket tests.
@@ -17,19 +18,6 @@ export interface Stats {
     bySource: Tally[] // sorted desc, friendly labels
     medianTimeToRemovalMs: number | null // among records whose post time is known
     perDay: Array<{ day: string; count: number }> // last 14 days incl. zeros, ascending
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-    communityFilter: 'community filter',
-    communityFilterPending: 'community filter (pending)',
-    moderator: 'moderator',
-    nuke: 'nuke',
-    admin: 'admin',
-    deleted: 'deleted',
-    legacy: 'legacy',
-}
-export function removalSourceLabel(source: string): string {
-    return SOURCE_LABELS[source] || source || 'unknown'
 }
 
 // --- export ---

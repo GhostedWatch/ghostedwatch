@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeStats, removalSourceLabel, toCSV, toJSON } from '../stats'
+import { computeStats, toCSV, toJSON } from '../stats'
 import type { RemovedRecord } from '../storage'
 
 const rec = (over: Partial<RemovedRecord>): RemovedRecord => ({
@@ -44,6 +44,21 @@ describe('computeStats', () => {
         expect(s.bySource[0]).toEqual({ name: 'community filter', count: 2 })
     })
 
+    it('labels sources with the shared removal-source labels (each filter separately)', () => {
+        const s = computeStats([
+            rec({ id: 1, removal_source: 'spamFilter' }),
+            rec({ id: 2, removal_source: 'riskFilterPending' }),
+            rec({ id: 3, removal_source: 'communityFilter' }),
+            rec({ id: 4, removal_source: '' }),
+        ])
+        expect(s.bySource.map(t => t.name).sort()).toEqual([
+            'community filter',
+            'risk filter (pending)',
+            'spam filter',
+            'unknown',
+        ])
+    })
+
     it('median time-to-removal from created→observed (ignores unknown created)', () => {
         const s = computeStats([
             rec({ id: 1, created: 1000, observed_utc: 4000 }), // 3000
@@ -70,15 +85,6 @@ describe('computeStats', () => {
     })
 })
 
-describe('removalSourceLabel', () => {
-    it('maps known sources and passes unknown through', () => {
-        expect(removalSourceLabel('communityFilter')).toBe('community filter')
-        expect(removalSourceLabel('moderator')).toBe('moderator')
-        expect(removalSourceLabel('')).toBe('unknown')
-        expect(removalSourceLabel('weird')).toBe('weird')
-    })
-})
-
 describe('export', () => {
     it('toCSV: header row + plain fields unquoted, special chars escaped', () => {
         const csv = toCSV([
@@ -88,6 +94,10 @@ describe('export', () => {
         expect(csv.split('\n')[0]).toBe('id,type,source,community,author,removed_by,status,created,observed,reapproved,title,text')
         expect(csv).toContain(',plain')
         expect(csv).toContain('"has, comma ""and"" quote\nnewline"') // quoted + doubled quotes
+    })
+    it('toCSV: removed_by carries the shared removal-source label', () => {
+        const [, row] = toCSV([rec({ id: 1, removal_source: 'politicsFilterPending' })]).split('\n')
+        expect(row.split(',')[5]).toBe('politics filter (pending)')
     })
     it('toJSON: round-trips the records', () => {
         const recs = [rec({ id: 1 }), rec({ id: 2, source: 'other' })]

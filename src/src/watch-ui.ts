@@ -56,9 +56,10 @@ export function watchTooltip(on: boolean, type: string, removed: boolean): strin
 }
 
 // The site replaces a removed item's body with a placeholder. The exact message
-// varies ("…by community filter.", "…upon the user being banned.", …) but always
-// starts with "Comment removed" / "Post removed", and the block carries no class or
-// attribute to key off — so we match that stable prefix.
+// varies ("…by community filter.", "…upon the user being banned.", …; the full list
+// is siteRemovalText in removal-sources.ts) but always starts with "Comment removed" /
+// "Post removed", and the block carries no class or attribute to key off — so we
+// match that stable prefix.
 const PLACEHOLDER_RE = /^\s*(comment|post) removed\b/i
 export function isRemovalPlaceholder(text: string): boolean {
     return PLACEHOLDER_RE.test(text)
