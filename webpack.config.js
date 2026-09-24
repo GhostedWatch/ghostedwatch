@@ -25,6 +25,17 @@ function parseChangelog() {
     return out
 }
 
+// Refuse to build a version the store description has no release note for (the
+// reveddit extension has the same guard): bump src/manifest.json together with a
+// new VERSION HISTORY entry.
+const changelog = parseChangelog()
+if (!changelog.some(e => e.version === manifestVersion && e.notes)) {
+    throw new Error(
+        `STORE_DESCRIPTION.txt has no changelog entry for manifest version ${manifestVersion}. ` +
+            'Add one at the top of VERSION HISTORY (the version on its own line, then its note) before building.',
+    )
+}
+
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 const browserIsFirefox = process.env.BROWSER === 'firefox'
 const builtFor = browserIsFirefox ? 'firefox' : 'chrome'
@@ -96,7 +107,7 @@ export default {
             __BUILT_FOR__: JSON.stringify(builtFor),
             __DEV__: JSON.stringify(mode !== 'production'),
             __VERSION__: JSON.stringify(manifestVersion),
-            __CHANGELOG__: JSON.stringify(parseChangelog()),
+            __CHANGELOG__: JSON.stringify(changelog),
         }),
         new CopyWebpackPlugin({
             patterns: [
