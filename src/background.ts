@@ -1,5 +1,5 @@
 import { APP_NAME, WIN_TAB_PATTERNS } from './src/constants'
-import { ALARM_NAME, setAlarm, setUnseenBadge, createNotification, createTab, permalink } from './src/common'
+import { ALARM_NAME, clampInterval, setAlarm, setUnseenBadge, createNotification, createTab, permalink } from './src/common'
 import api from './src/api'
 import { runCycle } from './src/poller'
 import { runOtherCycle, runSourceCycle, watchOtherFromPage } from './src/other'
@@ -8,7 +8,9 @@ import {
     addOwnItem,
     removeOtherItem,
     setWatchComments,
-    getOtherIds,
+    getOtherItems,
+    watchedIds,
+    autoCommentRoom,
     addSource,
     removeSource,
     getSourceKeys,
@@ -33,15 +35,23 @@ const WIN_TABS = WIN_TAB_PATTERNS
 // Dev-build breadcrumbs, mirrored by the content script's (see content.ts).
 const dlog = (...args: unknown[]) => { if (__DEV__) console.log('[GhostedWatch bg]', ...args) }
 
+const NO_CHANGES: { removed: OtherItem[]; reapproved: OtherItem[] } = { removed: [], reapproved: [] }
+
 let cycling = false
 async function cycle() {
     if (cycling) return
     cycling = true
+    // A check is mostly fetches, and Chrome stops an idle MV3 worker after 30 s without
+    // an extension API call (a pending fetch doesn't count), which would cut a long
+    // history scan or watch pass off part-way. A cheap call every 20 s keeps it running.
+    const keepAlive = setInterval(() => api.runtime.getPlatformInfo().catch(() => {}), 20000)
     try {
-        const own = await runCycle()
+        // Each part stores its own removals as notified before the alerts go out below,
+        // so one part failing must not keep the others' alerts from being sent.
+        const own = await runCycle().catch(e => (dlog('own-content check failed:', e), null))
         const origin = await getLastOrigin()
-        const o1 = await runOtherCycle(origin)
-        const o2 = await runSourceCycle(origin)
+        const o1 = await runOtherCycle(origin).catch(e => (dlog('watched-items check failed:', e), NO_CHANGES))
+        const o2 = await runSourceCycle(origin).catch(e => (dlog('watched-sources check failed:', e), NO_CHANGES))
         await notifyCycle({
             ownRemoved: own?.removed || [],
             ownReapproved: own?.reapproved || [],
@@ -52,6 +62,7 @@ async function cycle() {
         setUnseenBadge(await getUnseenCount())
         refreshOpenTabs()
     } finally {
+        clearInterval(keepAlive)
         cycling = false
     }
 }
@@ -108,9 +119,12 @@ function pluralNoun(items: NotifItem[]): string {
 }
 
 function fireNotification(notifId: string, title: string, body: string, items: NotifItem[]) {
-    createNotification({ notificationId: notifId, title, message: body })
+    // One id for the notification and its click targets, so a click finds what to open
+    // (createNotification keeps an id that already has a '|' as it is).
+    const id = `${notifId}|${Date.now()}`
+    createNotification({ notificationId: id, title, message: body })
     setNotifTargets(
-        notifId,
+        id,
         items.map(r => ({ uuid: r.uuid, post_uuid: r.post_uuid, type: r.type })),
     )
 }
@@ -231,10 +245,9 @@ async function alarmWatchdog() {
     // eslint-disable-next-line no-constant-condition
     while (true) {
         await new Promise(r => setTimeout(r, 65000))
-        if (Date.now() - (await getLastAlarm()) > 130000) {
-            const o = await getOptions()
-            setAlarm(o.interval || INTERVAL_DEFAULT)
-        }
+        const interval = clampInterval((await getOptions()).interval || INTERVAL_DEFAULT)
+        // the alarm is lost only once two of the user's own periods pass without it
+        if (Date.now() - (await getLastAlarm()) > 2 * interval * 60000 + 10000) setAlarm(interval)
     }
 }
 alarmWatchdog()
@@ -281,7 +294,10 @@ type Message =
       }
     | {
           action: 'watch-other'
-          item: Pick<OtherItem, 'id' | 'uuid' | 'type' | 'post_id' | 'post_uuid'> & { watch_comments?: boolean }
+          item: Pick<OtherItem, 'id' | 'uuid' | 'type' | 'post_id' | 'post_uuid'> & {
+              watch_comments?: boolean
+              removed?: boolean // the page showed it as removed
+          }
       }
     | { action: 'unwatch-other'; id: number }
     | { action: 'set-watch-comments'; id: number; watch_comments: boolean }
@@ -329,13 +345,29 @@ api.runtime.onMessage.addListener((message: Message, _sender: chrome.runtime.Mes
             removeSource(message.key).then(() => sendResponse({ ok: true }))
             return true
         case 'list-other':
-            Promise.all([getOtherIds(), getSourceKeys()]).then(([ids, sources]) => sendResponse({ ids, sources }))
+            // autoRoom: whether a new whole-post watch can follow comments (the post menu says)
+            Promise.all([getOtherItems(), getSourceKeys()]).then(([map, sources]) =>
+                sendResponse({ ids: watchedIds(map), sources, autoRoom: autoCommentRoom(map) }),
+            )
             return true
         case 'set-auth':
-            setAuth(message.auth).then(() => {
-                dlog('auth stored for', message.auth.user, '@', message.auth.origin)
+            getAuth().then(async prev => {
+                const a = message.auth
+                // Every page load and each tab's 5-minute timer send the session again.
+                // Only a new or changed one is stored and checked at once; for the same
+                // session the alarm keeps to the user's interval.
+                const changed =
+                    !prev ||
+                    prev.user !== a.user ||
+                    prev.origin !== a.origin ||
+                    prev.apiKey !== a.apiKey ||
+                    prev.apiSecret !== a.apiSecret
+                if (changed) {
+                    await setAuth(a)
+                    dlog('auth stored for', a.user, '@', a.origin)
+                }
                 sendResponse({ ok: true })
-                cycle()
+                if (changed) cycle()
             })
             return true
         case 'check-now':

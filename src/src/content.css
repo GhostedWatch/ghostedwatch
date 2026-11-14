@@ -898,6 +898,13 @@ a.wrow-title:hover {
     line-height: 1.45;
     color: var(--ink);
 }
+/* a whole-post watch that a comment limit stops (threadLimitNote) */
+.wrow-limit {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--warn-fg);
+    margin-top: 3px;
+}
 .wrow-cta {
     flex: none;
     padding: 8px 13px;

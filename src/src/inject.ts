@@ -46,7 +46,7 @@ function extractCreatedComment(requestBody: any, responseJson: any): void {
         community: comment.community || requestBody?.community || '',
         created: comment.created || Date.now(),
         title: '',
-        text: comment.raw_content ?? comment.content ?? requestBody?.content ?? '',
+        text: comment.raw_content || comment.content || requestBody?.content || '',
     })
     if (comment.author) send({ type: 'logged-in-user', user: comment.author })
 }
@@ -64,7 +64,7 @@ function extractCreatedPost(requestBody: any, responseJson: any): void {
         community: post.community || requestBody?.community || '',
         created: post.created || Date.now(),
         title: post.title || requestBody?.title || '',
-        text: post.raw_content ?? post.content ?? requestBody?.content ?? '',
+        text: post.raw_content || post.content || requestBody?.content || '',
     })
     if (post.author) send({ type: 'logged-in-user', user: post.author })
 }

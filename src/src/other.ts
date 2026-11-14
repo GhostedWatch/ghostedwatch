@@ -9,7 +9,7 @@ import { apiGet, idToUuid, normalizeProfileComment, type ItemType } from './win-
 import { foldRemoval } from './monitoring'
 import {
     getOtherItems,
-    setOtherItems,
+    updateOtherItems,
     addOtherItem,
     getRemoved,
     addRemovedRecord,
@@ -22,13 +22,16 @@ import {
     getOtherCursor,
     setOtherCursor,
     OTHER_POSTS_PER_CYCLE,
+    MAX_AUTO_PER_POST,
+    MAX_AUTO_TOTAL,
     getSources,
-    setSources,
+    updateSources,
     getSourceCursor,
     setSourceCursor,
     SOURCES_PER_CYCLE,
     MAX_SOURCE_ITEMS,
     type OtherItem,
+    type RemovedRecord,
     type WatchSource,
 } from './storage'
 import { setUnseenBadge } from './common'
@@ -45,6 +48,7 @@ export async function watchOtherFromPage(
         post_id: number
         post_uuid: string
         watch_comments?: boolean // post only: also watch every comment in the thread
+        removed?: boolean // the page showed it as removed when the user clicked Watch
     },
 ): Promise<void> {
     let author = ''
@@ -52,6 +56,8 @@ export async function watchOtherFromPage(
     let created = 0
     let title = ''
     let text = ''
+    let isRemoved = false
+    let removalSource = ''
     try {
         const data = await apiGet<{ posts?: any[]; comments?: any[] }>(
             origin,
@@ -67,11 +73,29 @@ export async function watchOtherFromPage(
             created = subject.created || 0
             title = item.type === 'post' ? subject.title || '' : ''
             text = subject.raw_content || subject.content || ''
+            // Already removed, as the page showed when the user clicked: the tooltip told
+            // them this watch alerts on a re-approval, so the removal isn't news.
+            isRemoved = item.removed === true && subject.is_removed === true
+            removalSource = subject.removal_source || ''
         }
     } catch {
         /* best-effort — watch with what we have */
     }
-    await addOtherItem({ ...item, author, community, created, title, text, watch_comments: item.watch_comments })
+    await addOtherItem({
+        id: item.id,
+        uuid: item.uuid,
+        type: item.type,
+        post_id: item.post_id,
+        post_uuid: item.post_uuid,
+        author,
+        community,
+        created,
+        title,
+        text,
+        watch_comments: item.watch_comments,
+        is_removed: isRemoved,
+        removal_source: removalSource,
+    })
 }
 
 export type OtherObservation = 'live' | 'removed' | 'absent' | 'unknown'
@@ -136,6 +160,100 @@ interface PostThreadResponse {
     has_more_entries?: boolean
 }
 
+// Collects what one cycle confirmed, for commitOutcomes.
+interface Outcomes {
+    alreadyRemoved: Record<string, RemovedRecord>
+    removed: Array<{ w: OtherItem; hidden: boolean }>
+    reapproved: OtherItem[]
+}
+
+// Fold one observation of a watched item into `items` and collect a confirmed
+// removal/re-approval. A re-approval counts even without a removal record: an item that
+// was already removed when we started watching it starts out recorded, and its coming
+// back is exactly what that watch waits for. Muted items are neither checked nor alerted.
+function foldInto(
+    items: Record<string, OtherItem>,
+    w: OtherItem,
+    observed: OtherObservation,
+    src: string,
+    out: Outcomes,
+    folded: Set<number>,
+): void {
+    folded.add(w.id)
+    if (w.muted) return
+    const r = applyOtherObservation(w, observed, src)
+    items[String(w.id)] = r.next
+    const prevRec = out.alreadyRemoved[String(w.id)]
+    if (r.newlyRemoved && (!prevRec || prevRec.reapproved_utc)) {
+        out.removed.push({ w: r.next, hidden: observed === 'absent' })
+    } else if (r.newlyReapproved && !prevRec?.reapproved_utc) {
+        out.reapproved.push(r.next)
+    }
+}
+
+// Fold one fetched thread into the watched-items map: every watched item in the post,
+// plus, for a whole-post watch, every comment in the thread.
+function foldThread(map: Record<string, OtherItem>, postId: number, data: PostThreadResponse, out: Outcomes): void {
+    const complete = !data?.has_more_entries
+    const byId = new Map<number, RemovableItem>((data?.comments || []).map(c => [c.id, c]))
+    // the post itself (for watched posts); its removal state lives on the post object
+    const post = (data?.posts || []).find(p => p.id === postId) || data?.posts?.[0]
+    const folded = new Set<number>()
+
+    // explicitly-watched items in this post (the post and/or individual comments)
+    for (const w of Object.values(map)) {
+        if (w.post_id !== postId) continue
+        // a watched POST reads its status from the post object; a watched COMMENT
+        // from the thread's comment list (absent-from-a-complete-tree = removed)
+        const subject = w.type === 'post' ? post : byId.get(w.id)
+        let observed: OtherObservation
+        let src = ''
+        if (subject) {
+            observed = subject.is_removed === true ? 'removed' : 'live'
+            src = subject.removal_source || ''
+        } else if (w.type === 'post') {
+            observed = 'absent' // the post wasn't returned at all (gone/deleted)
+        } else {
+            observed = complete ? 'absent' : 'unknown' // comment: absent only counts if tree complete
+        }
+        foldInto(map, w, observed, src, out, folded)
+    }
+
+    // whole-post: also watch every comment in the thread (auto-add new ones; a
+    // comment that vanishes from a complete tree is a removal)
+    const postItem = map[String(postId)]
+    if (postItem?.type === 'post' && postItem.watch_comments) {
+        let autos = Object.values(map).filter(v => v.auto && v.post_id === postId).length
+        let allAutos = Object.values(map).filter(v => v.auto).length
+        for (const c of data?.comments || []) {
+            let w = map[String(c.id)]
+            if (!w) {
+                // a huge thread: follow the first ones only; all threads: stay in the storage budget
+                if (autos >= MAX_AUTO_PER_POST || allAutos >= MAX_AUTO_TOTAL) continue
+                autos++
+                allAutos++
+                w = autoComment(c, postItem)
+                map[String(c.id)] = w
+                if (c.is_removed === true) {
+                    // already removed when we started watching → baseline silently
+                    w.is_removed = true
+                    w.recorded = true
+                    folded.add(c.id)
+                    continue
+                }
+            }
+            if (!folded.has(c.id)) foldInto(map, w, c.is_removed === true ? 'removed' : 'live', c.removal_source || '', out, folded)
+        }
+        if (complete) {
+            for (const w of Object.values(map)) {
+                if (w.type === 'comment' && w.post_id === postId && !byId.has(w.id) && !folded.has(w.id)) {
+                    foldInto(map, w, 'absent', '', out, folded)
+                }
+            }
+        }
+    }
+}
+
 // Run one watch-detection pass against `origin` (the user's active .win origin;
 // post.json is anonymous so no tokens are used). Returns the newly removed / newly
 // re-approved watched comments for the background to notify.
@@ -143,18 +261,11 @@ export async function runOtherCycle(origin: string): Promise<{
     removed: OtherItem[]
     reapproved: OtherItem[]
 }> {
-    const map = await getOtherItems()
-    const all = Object.values(map)
+    const all = Object.values(await getOtherItems())
     if (all.length === 0) return { removed: [], reapproved: [] }
 
-    // group watched comments by their post (one fetch per post covers them all)
-    const byPost = new Map<number, OtherItem[]>()
-    for (const w of all) {
-        const arr = byPost.get(w.post_id) || []
-        arr.push(w)
-        byPost.set(w.post_id, arr)
-    }
-    const postIds = [...byPost.keys()]
+    // one fetch per post covers every watched item in it
+    const postIds = [...new Set(all.map(w => w.post_id))]
 
     // round-robin a slice of posts this cycle so we never exceed the request budget
     let cursor = await getOtherCursor()
@@ -165,84 +276,24 @@ export async function runOtherCycle(origin: string): Promise<{
     }
     await setOtherCursor((cursor + slice.length) % Math.max(1, postIds.length))
 
-    const alreadyRemoved = await getRemoved()
-    const newlyRemoved: Array<{ w: OtherItem; hidden: boolean }> = []
-    const newlyReapproved: OtherItem[] = []
-
+    // The network part first, holding no state: these fetches take seconds, and the
+    // user can watch or unwatch something meanwhile.
+    const threads = new Map<number, PostThreadResponse>()
     for (const postId of new Set(slice)) {
-        let data: PostThreadResponse
         try {
-            data = await apiGet<PostThreadResponse>(origin, `post/post.json?id=${postId}&comments=true`)
+            threads.set(postId, await apiGet<PostThreadResponse>(origin, `post/post.json?id=${postId}&comments=true`))
         } catch {
-            continue // inconclusive this cycle; leave these comments' state untouched
-        }
-        const complete = !data?.has_more_entries
-        const byId = new Map<number, RemovableItem>((data?.comments || []).map(c => [c.id, c]))
-        // the post itself (for watched posts); its removal state lives on the post object
-        const post = (data?.posts || []).find(p => p.id === postId) || data?.posts?.[0]
-        const folded = new Set<number>()
-
-        // fold one observation, collect a confirmed removal/re-approval for notifying
-        const fold = (w: OtherItem, observed: OtherObservation, src = '') => {
-            const r = applyOtherObservation(w, observed, src)
-            map[String(w.id)] = r.next
-            folded.add(w.id)
-            const prevRec = alreadyRemoved[String(w.id)]
-            if (r.newlyRemoved && (!prevRec || prevRec.reapproved_utc)) {
-                newlyRemoved.push({ w: r.next, hidden: observed === 'absent' })
-            } else if (r.newlyReapproved && prevRec && !prevRec.reapproved_utc) {
-                newlyReapproved.push(r.next)
-            }
-        }
-
-        // explicitly-watched items in this post (the post and/or individual comments)
-        for (const w of byPost.get(postId)!) {
-            // a watched POST reads its status from the post object; a watched COMMENT
-            // from the thread's comment list (absent-from-a-complete-tree = removed)
-            const subject = w.type === 'post' ? post : byId.get(w.id)
-            let observed: OtherObservation
-            let src = ''
-            if (subject) {
-                observed = subject.is_removed === true ? 'removed' : 'live'
-                src = subject.removal_source || ''
-            } else if (w.type === 'post') {
-                observed = 'absent' // the post wasn't returned at all (gone/deleted)
-            } else {
-                observed = complete ? 'absent' : 'unknown' // comment: absent only counts if tree complete
-            }
-            fold(w, observed, src)
-        }
-
-        // whole-post: also watch every comment in the thread (auto-add new ones; a
-        // comment that vanishes from a complete tree is a removal)
-        const postItem = map[String(postId)]
-        if (postItem?.type === 'post' && postItem.watch_comments) {
-            for (const c of data?.comments || []) {
-                let w = map[String(c.id)]
-                if (!w) {
-                    w = autoComment(c, postItem)
-                    map[String(c.id)] = w
-                    if (c.is_removed === true) {
-                        // already removed when we started watching → baseline silently
-                        w.is_removed = true
-                        w.recorded = true
-                        folded.add(c.id)
-                        continue
-                    }
-                }
-                if (!folded.has(c.id)) fold(w, c.is_removed === true ? 'removed' : 'live', c.removal_source || '')
-            }
-            if (complete) {
-                for (const w of Object.values(map)) {
-                    if (w.type === 'comment' && w.post_id === postId && !byId.has(w.id) && !folded.has(w.id)) {
-                        fold(w, 'absent')
-                    }
-                }
-            }
+            /* inconclusive this cycle; leave these items' state untouched */
         }
     }
-    await setOtherItems(map)
-    return commitOutcomes(newlyRemoved, newlyReapproved)
+    if (threads.size === 0) return { removed: [], reapproved: [] }
+
+    // Then fold the results into the map as it is now, so those changes stand.
+    const out: Outcomes = { alreadyRemoved: await getRemoved(), removed: [], reapproved: [] }
+    await updateOtherItems(map => {
+        for (const [postId, data] of threads) foldThread(map, postId, data, out)
+    })
+    return commitOutcomes(out.removed, out.reapproved)
 }
 
 // Record confirmed removals/re-approvals and return the ones to notify (each id alerts
@@ -353,6 +404,43 @@ async function fetchSourceItems(origin: string, src: WatchSource): Promise<Other
     return (data?.posts || []).filter(p => p?.id).map(fromFeedPost)
 }
 
+// Fold one source's freshly fetched items into its stored state.
+function foldSource(src: WatchSource, items: OtherItem[], out: Outcomes): void {
+    if (items.length === 0 && Object.keys(src.items).length === 0) return
+    const currentIds = new Set(items.map(i => i.id))
+    // anything older than this is outside the window we can see, so absence there
+    // can't be distinguished from "scrolled off" → inconclusive
+    const oldestVisible = items.length ? Math.min(...items.map(i => i.created || 0)) : Infinity
+    const folded = new Set<number>()
+
+    // currently-visible items
+    for (const it of items) {
+        let w = src.items[String(it.id)]
+        if (!w) {
+            w = { ...it, watched_at: Date.now() }
+            src.items[String(it.id)] = w
+            if (it.is_removed) {
+                // already removed when we started watching → baseline silently
+                w.is_removed = true
+                w.recorded = true
+                folded.add(it.id)
+                continue
+            }
+        }
+        if (!folded.has(it.id)) foldInto(src.items, w, it.is_removed ? 'removed' : 'live', it.removal_source, out, folded)
+    }
+    // items we knew that are gone now — removed only if within the visible window
+    for (const w of Object.values(src.items)) {
+        if (currentIds.has(w.id) || folded.has(w.id)) continue
+        foldInto(src.items, w, (w.created || 0) > oldestVisible ? 'absent' : 'unknown', '', out, folded)
+    }
+    // cap items per source (keep the most recent)
+    const kept = Object.values(src.items)
+        .sort((a, b) => (b.created || 0) - (a.created || 0))
+        .slice(0, MAX_SOURCE_ITEMS)
+    src.items = Object.fromEntries(kept.map(w => [String(w.id), w]))
+}
+
 export async function runSourceCycle(origin: string): Promise<{ removed: OtherItem[]; reapproved: OtherItem[] }> {
     const sources = await getSources()
     const keys = Object.keys(sources)
@@ -366,66 +454,24 @@ export async function runSourceCycle(origin: string): Promise<{ removed: OtherIt
     }
     await setSourceCursor((cursor + slice.length) % Math.max(1, keys.length))
 
-    const alreadyRemoved = await getRemoved()
-    const newlyRemoved: Array<{ w: OtherItem; hidden: boolean }> = []
-    const newlyReapproved: OtherItem[] = []
-
+    // the network part first, holding no state (see runOtherCycle)
+    const fetched = new Map<string, OtherItem[]>()
     for (const key of new Set(slice)) {
         const src = sources[key]
         if (!src) continue
-        let items: OtherItem[]
         try {
-            items = await fetchSourceItems(origin, src)
+            fetched.set(key, await fetchSourceItems(origin, src))
         } catch {
-            continue // inconclusive this cycle
+            /* inconclusive this cycle */
         }
-        if (items.length === 0 && Object.keys(src.items).length === 0) continue
-        const currentIds = new Set(items.map(i => i.id))
-        // anything older than this is outside the window we can see, so absence there
-        // can't be distinguished from "scrolled off" → inconclusive
-        const oldestVisible = items.length ? Math.min(...items.map(i => i.created || 0)) : Infinity
-        const folded = new Set<number>()
-
-        const fold = (w: OtherItem, observed: OtherObservation, srcLabel = '') => {
-            const r = applyOtherObservation(w, observed, srcLabel)
-            src.items[String(w.id)] = r.next
-            folded.add(w.id)
-            const prevRec = alreadyRemoved[String(w.id)]
-            if (r.newlyRemoved && (!prevRec || prevRec.reapproved_utc)) {
-                newlyRemoved.push({ w: r.next, hidden: observed === 'absent' })
-            } else if (r.newlyReapproved && prevRec && !prevRec.reapproved_utc) {
-                newlyReapproved.push(r.next)
-            }
-        }
-
-        // currently-visible items
-        for (const it of items) {
-            let w = src.items[String(it.id)]
-            if (!w) {
-                w = { ...it, watched_at: Date.now() }
-                src.items[String(it.id)] = w
-                if (it.is_removed) {
-                    // already removed when we started watching → baseline silently
-                    w.is_removed = true
-                    w.recorded = true
-                    folded.add(it.id)
-                    continue
-                }
-            }
-            if (!folded.has(it.id)) fold(w, it.is_removed ? 'removed' : 'live', it.removal_source)
-        }
-        // items we knew that are gone now — removed only if within the visible window
-        for (const w of Object.values(src.items)) {
-            if (currentIds.has(w.id) || folded.has(w.id)) continue
-            fold(w, (w.created || 0) > oldestVisible ? 'absent' : 'unknown')
-        }
-        // cap items per source (keep the most recent)
-        const kept = Object.values(src.items)
-            .sort((a, b) => (b.created || 0) - (a.created || 0))
-            .slice(0, MAX_SOURCE_ITEMS)
-        src.items = Object.fromEntries(kept.map(w => [String(w.id), w]))
     }
+    if (fetched.size === 0) return { removed: [], reapproved: [] }
 
-    await setSources(sources)
-    return commitOutcomes(newlyRemoved, newlyReapproved)
+    // then fold into the sources as they are now: one unwatched meanwhile stays gone,
+    // one added meanwhile stays
+    const out: Outcomes = { alreadyRemoved: await getRemoved(), removed: [], reapproved: [] }
+    await updateSources(current => {
+        for (const [key, items] of fetched) if (current[key]) foldSource(current[key], items, out)
+    })
+    return commitOutcomes(out.removed, out.reapproved)
 }

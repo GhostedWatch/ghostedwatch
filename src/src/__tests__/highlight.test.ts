@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { uuidFromHref, postUuidFromHref, childContaining, showsOriginal } from '../highlight'
+import { uuidFromHref, postUuidFromHref, childContaining, showsOriginal, isCommentHref } from '../highlight'
 
 // Build a fake node tree (only parentElement is walked) mirroring the real .win
 // comment block: a flex row [vote | body | .child reply], where body holds the
@@ -57,6 +57,19 @@ describe('uuidFromHref (comment uuid)', () => {
     it('returns null when there is no comment segment', () => {
         expect(uuidFromHref('/p/examplePost2/just-a-post')).toBeNull()
         expect(uuidFromHref('/u/someuser')).toBeNull()
+    })
+})
+
+// The post pass skips comment links: a comment's permalink names its post too.
+describe('isCommentHref', () => {
+    it('is true for comment permalinks on both sites', () => {
+        expect(isCommentHref('/p/examplePost1/example-post/c/exampleCmnt1')).toBe(true)
+        expect(isCommentHref('/c/SomeCommunity/p/examplePost2/some-slug/c/exampleCmnt2')).toBe(true)
+    })
+    it("is false for post links, including scored.co's /c/<community>/p/<post>", () => {
+        expect(isCommentHref('/p/examplePost2/just-a-post')).toBe(false)
+        expect(isCommentHref('/c/SomeCommunity/p/examplePost2/some-slug')).toBe(false)
+        expect(isCommentHref('/c/SomeCommunity')).toBe(false)
     })
 })
 

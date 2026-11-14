@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getOptions, setOptions, INTERVAL_DEFAULT } from './storage'
+import { getOptions, setOptions, INTERVAL_DEFAULT, type Options } from './storage'
+import { clampInterval } from './common'
 import api from './api'
 import { EyeMark } from './Ghost'
 
@@ -22,12 +23,14 @@ function OptionsPage() {
         setSaved(true)
         setTimeout(() => setSaved(false), 1500)
     }
-    const persist = async (over: Partial<{ interval: number; watchButtons: boolean; notifyMode: 'each' | 'summary' }>) => {
-        await setOptions({ interval, watchButtons, notifyMode, ...over })
+    // Merge into what's saved, so a switch saves only itself, never an interval still
+    // being typed (that's saved, clamped, by Save changes).
+    const persist = async (over: Partial<Options>) => {
+        await setOptions({ ...(await getOptions()), ...over })
         flashSaved()
     }
     const saveChanges = async () => {
-        const clamped = Math.max(1, Math.min(60, Math.round(interval) || INTERVAL_DEFAULT))
+        const clamped = clampInterval(interval)
         setIntervalValue(clamped)
         await persist({ interval: clamped })
     }

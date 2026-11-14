@@ -25,12 +25,16 @@ background.
   On first run it pages through your whole history once (bounded to ~500 items,
   ~0.8s between pages) to find existing removals — recorded **without** per-item
   notifications, summarized as a single "found N removed" notice. After that,
-  ongoing checks fetch only the first page each minute (~1 request), since new
-  removals of recent items show up there. A `chrome.alarms` timer (with a watchdog)
-  drives the cycle.
-- **Confirm + notify.** Each observation is folded into stored state; after a couple
-  of consecutive confirmations a removal is recorded, a notification fires, and the
-  badge updates (each id notifies at most once, ever).
+  ongoing checks fetch the first page each minute (~1 request; a page is 25 items,
+  about a day for an active poster), and every 6 hours the next three pages too, so
+  a removal or re-approval of something that has slid off page 1 is still caught.
+  Those pages are read too rarely for the usual two sightings: one confirms there,
+  and the record is marked like a history-scan find, so timings leave it out. A
+  `chrome.alarms` timer (with a watchdog) drives the cycle.
+- **Confirm + notify.** Each observation is folded into stored state; after two
+  sightings in a row on page 1 (one on the pages read every 6 hours) a removal is
+  recorded, a notification fires, and the badge updates (each id notifies at most
+  once, ever).
 - **Recovering your text.** A removed item's **list entry appears immediately** (its
   permalink is built from the uuid — no lookup needed). The **text** fills in right
   after:

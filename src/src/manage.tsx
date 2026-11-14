@@ -7,11 +7,12 @@ import {
     getOtherItems,
     getSources,
     getLastOrigin,
+    autoCommentRoom,
     type Auth,
     type OtherItem,
     type WatchSource,
 } from './storage'
-import { sendMessage } from './ui-common'
+import { sendMessage, threadLimitNote } from './ui-common'
 import { permalink } from './common'
 import { APP_NAME } from './constants'
 import api from './api'
@@ -99,12 +100,22 @@ function AccountRow({ account, origin }: { account: Account; origin?: string }) 
 function ManagePage() {
     // exclude `auto` comments — they belong to a whole-post watch, shown under its post
     const [items, setItems] = useState<OtherItem[]>([])
+    // per watched post, how many of its comments a whole-post watch follows; and how many
+    // more all of them together may add, so a row can say when a limit stops it
+    const [followed, setFollowed] = useState<Record<number, number>>({})
+    const [room, setRoom] = useState(Infinity)
     const [sources, setSources] = useState<WatchSource[]>([])
     const [origin, setOrigin] = useState<string>()
     const [account, setAccount] = useState<Account | null>(null) // null until first loaded
 
     const load = async () => {
-        setItems(Object.values(await getOtherItems()).filter(w => !w.auto))
+        const map = await getOtherItems()
+        const all = Object.values(map)
+        const counts: Record<number, number> = {}
+        for (const w of all) if (w.auto) counts[w.post_id] = (counts[w.post_id] || 0) + 1
+        setItems(all.filter(w => !w.auto))
+        setFollowed(counts)
+        setRoom(autoCommentRoom(map))
         setSources(Object.values(await getSources()))
         setOrigin(await getLastOrigin())
         setAccount({
@@ -215,6 +226,9 @@ function ManagePage() {
                                     <div className="wrow-sub">
                                         c/{w.community} · by {w.author}
                                     </div>
+                                    {w.watch_comments && threadLimitNote(followed[w.id] || 0, room) && (
+                                        <div className="wrow-limit">{threadLimitNote(followed[w.id] || 0, room)}</div>
+                                    )}
                                 </div>
                                 <div className="wrow-toggle">
                                     <span className={`wrow-toggle-lbl${w.watch_comments ? ' on' : ''}`}>

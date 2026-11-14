@@ -4,9 +4,15 @@ export const ALARM_NAME = 'win-notifyme'
 
 const ACTION_API = __BUILT_FOR__ === 'chrome' ? 'action' : 'browserAction'
 
+// The check interval the options allow: whole minutes, 1 to 60. Anything else (an
+// empty box, a typo, a stray stored value) becomes the nearest allowed value, or 1.
+export function clampInterval(minutes: number): number {
+    return Math.max(1, Math.min(60, Math.round(minutes) || 1))
+}
+
 export function setAlarm(periodInMinutes: number): void {
     api.alarms.clear(ALARM_NAME)
-    api.alarms.create(ALARM_NAME, { delayInMinutes: 1, periodInMinutes })
+    api.alarms.create(ALARM_NAME, { delayInMinutes: 1, periodInMinutes: clampInterval(periodInMinutes) })
 }
 
 export function setUnseenBadge(count: number): void {

@@ -13,9 +13,15 @@ export function wrapLines(text: string, maxChars: number): string[] {
     for (const word of text.replace(/\s+/g, ' ').trim().split(' ')) {
         if (!word) continue
         cur = cur && (cur + ' ' + word).length > maxChars ? (lines.push(cur), word) : cur ? cur + ' ' + word : word
-        while (cur.length > maxChars) {
-            lines.push(cur.slice(0, maxChars))
-            cur = cur.slice(maxChars)
+        if (cur.length > maxChars) {
+            // Cut on whole characters: a cut through an emoji's surrogate pair leaves half
+            // a character, and encoding the image's data URL then throws.
+            let chars = Array.from(cur)
+            while (chars.length > maxChars) {
+                lines.push(chars.slice(0, maxChars).join(''))
+                chars = chars.slice(maxChars)
+            }
+            cur = chars.join('')
         }
     }
     if (cur) lines.push(cur)

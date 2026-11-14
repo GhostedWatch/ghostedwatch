@@ -68,6 +68,21 @@ describe('computeStats', () => {
         expect(s.medianTimeToRemovalMs).toBe(4000)
     })
 
+    it('leaves history-scan finds out of the timing figures (their time is the scan), not the totals', () => {
+        const now = Date.UTC(2026, 5, 20, 12)
+        const s = computeStats(
+            [
+                rec({ id: 1, created: now - 4000, observed_utc: now - 1000 }), // 3000
+                rec({ id: 2, created: now - 90 * 86400000, observed_utc: now, backfill: true }),
+                rec({ id: 3, created: now - 30 * 86400000, observed_utc: now, backfill: true }),
+            ],
+            now,
+        )
+        expect(s.total).toBe(3)
+        expect(s.medianTimeToRemovalMs).toBe(3000)
+        expect(s.perDay[13].count).toBe(1)
+    })
+
     it('buckets removals into the last 14 days, zero-filled', () => {
         const now = Date.UTC(2026, 5, 20, 12)
         const s = computeStats(
@@ -94,6 +109,20 @@ describe('export', () => {
         expect(csv.split('\n')[0]).toBe('id,type,source,community,author,removed_by,status,created,observed,reapproved,title,text')
         expect(csv).toContain(',plain')
         expect(csv).toContain('"has, comma ""and"" quote\nnewline"') // quoted + doubled quotes
+    })
+    it('toCSV: text that a spreadsheet would run as a formula stays text', () => {
+        const rows = toCSV([
+            rec({ id: 1, text: '=HYPERLINK("http://x","click")' }),
+            rec({ id: 2, text: '+1 agreed' }),
+            rec({ id: 3, text: '@everyone' }),
+            rec({ id: 4, text: '-5 for this' }),
+            rec({ id: 5, text: 'a = b' }),
+        ]).split('\n')
+        expect(rows[1].endsWith(`,"'=HYPERLINK(""http://x"",""click"")"`)).toBe(true)
+        expect(rows[2].endsWith(",'+1 agreed")).toBe(true)
+        expect(rows[3].endsWith(",'@everyone")).toBe(true)
+        expect(rows[4].endsWith(",'-5 for this")).toBe(true)
+        expect(rows[5].endsWith(',a = b')).toBe(true) // only a leading sign matters
     })
     it('toCSV: removed_by carries the shared removal-source label', () => {
         const [, row] = toCSV([rec({ id: 1, removal_source: 'politicsFilterPending' })]).split('\n')

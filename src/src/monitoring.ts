@@ -1,7 +1,6 @@
 import type { ProfileComment } from './win-api'
 import {
-    getOwnItems,
-    setOwnItems,
+    updateOwnItems,
     trimOwnItems,
     getRemoved,
     addRemovedRecord,
@@ -117,31 +116,36 @@ export function applyProfileObservation(
 // newly recorded removals so the caller can fire a single, collapsed notification
 // for the whole check.
 // `confirmThreshold` defaults to the usual 2-consecutive-observation confirmation;
-// the initial history backfill passes 1 so pre-existing removals show immediately.
+// reads of older pages (the first-run history scan, and the 6-hourly read past page 1)
+// pass 1 so what they find shows at once, and `backfill` so those records are marked as
+// found by a scan. The 6-hourly read also passes a `reapproveThreshold` of 1.
 export async function processProfileComments(
     items: ProfileComment[],
     confirmThreshold = REMOVAL_CONFIRM_THRESHOLD,
+    backfill = false,
+    reapproveThreshold = REAPPROVAL_CONFIRM_THRESHOLD,
 ): Promise<{ removed: OwnItem[]; reapproved: OwnItem[] }> {
-    const map = await getOwnItems()
     // Idempotency guard: never re-record/re-notify something already in the removed
     // store, even if the tracked map (local) was cleared while removed persisted.
     const alreadyRemoved = await getRemoved()
     const newlyRemoved: OwnItem[] = []
     const newlyReapproved: OwnItem[] = []
-    for (const item of items) {
-        if (!item.id) continue
-        const obs = applyProfileObservation(map[String(item.id)], item, confirmThreshold)
-        map[String(item.id)] = obs.next
-        const prevRec = alreadyRemoved[String(item.id)]
-        // record a removal when it's new, OR when the existing record was already
-        // re-approved (this is a fresh removal of an item that came back, then went)
-        if (obs.newlyRemoved && (!prevRec || prevRec.reapproved_utc)) newlyRemoved.push(obs.next)
-        // a re-approval only matters if there's a recorded removal not already re-approved
-        else if (obs.newlyReapproved && prevRec && !prevRec.reapproved_utc) newlyReapproved.push(obs.next)
-    }
-    await setOwnItems(trimOwnItems(map))
+    await updateOwnItems(map => {
+        for (const item of items) {
+            if (!item.id) continue
+            const obs = applyProfileObservation(map[String(item.id)], item, confirmThreshold, reapproveThreshold)
+            map[String(item.id)] = obs.next
+            const prevRec = alreadyRemoved[String(item.id)]
+            // record a removal when it's new, OR when the existing record was already
+            // re-approved (this is a fresh removal of an item that came back, then went)
+            if (obs.newlyRemoved && (!prevRec || prevRec.reapproved_utc)) newlyRemoved.push(obs.next)
+            // a re-approval only matters if there's a recorded removal not already re-approved
+            else if (obs.newlyReapproved && prevRec && !prevRec.reapproved_utc) newlyReapproved.push(obs.next)
+        }
+        return trimOwnItems(map)
+    })
 
-    for (const t of newlyRemoved) await recordRemoval(t)
+    for (const t of newlyRemoved) await recordRemoval(t, backfill)
     const now = Date.now()
     for (const t of newlyReapproved) {
         await markReapproved(t.id, now)
@@ -166,8 +170,10 @@ export async function processProfileComments(
     return { removed: toNotify, reapproved: newlyReapproved }
 }
 
-async function recordRemoval(t: OwnItem): Promise<void> {
+async function recordRemoval(t: OwnItem, backfill: boolean): Promise<void> {
     await addRemovedRecord({
+        // found by the first-run history scan: removed some time before it ran
+        ...(backfill ? { backfill: true } : {}),
         id: t.id,
         uuid: t.uuid,
         type: t.type,

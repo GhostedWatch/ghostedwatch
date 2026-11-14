@@ -65,6 +65,13 @@ export function postUuidFromHref(href: string): string | null {
     return m ? m[1] : null
 }
 
+// Is this a link to a comment? Its path names the post (/p/<post>) and then the comment
+// (/c/<uuid>); a scored.co post link has a /c/<community> only before its /p/.
+export function isCommentHref(href: string): boolean {
+    const p = href.indexOf('/p/')
+    return p !== -1 && href.indexOf('/c/', p) !== -1
+}
+
 // Nearest ancestor whose class contains the given whole word ("comment" / "post").
 export function closestBlock(el: Element, word: string): HTMLElement | null {
     const re = new RegExp(`(^|\\s)${word}(\\s|$)`)
@@ -187,32 +194,28 @@ export function attachTip(el: HTMLElement, text: TipText): void {
     })
 }
 
+// Undo everything mark() added to a target.
+function unmark(target: HTMLElement): void {
+    target.removeAttribute(DATA_ATTR)
+    target.classList.remove(C.removed)
+    target.querySelector(`.${C.banner}`)?.remove()
+    target.querySelector(`.${C.recovered}`)?.remove()
+}
+
 // Remove banners whose item is no longer known-removed or whose block is gone. The
 // SPA reuses/replaces DOM on navigation, so this prevents stale/orphaned tags.
 function cleanupBanners(): void {
     document.querySelectorAll<HTMLElement>(`.${C.banner}`).forEach(banner => {
-        const block = banner.closest<HTMLElement>(`[${DATA_ATTR}]`)
-        const uuid = block?.getAttribute(DATA_ATTR) || ''
-        if (!block || !removedByUuid.has(uuid)) {
-            banner.remove()
-            if (block) {
-                block.removeAttribute(DATA_ATTR)
-                block.classList.remove(C.removed)
-                block.querySelector(`.${C.recovered}`)?.remove()
-            }
-        }
+        const target = banner.closest<HTMLElement>(`[${DATA_ATTR}]`)
+        if (!target) banner.remove()
+        else if (!removedByUuid.has(target.getAttribute(DATA_ATTR) || '')) unmark(target)
     })
 }
 
 // Drop every mark on the page. Any present when a copy starts were left by a copy
 // orphaned by an extension update, and their click/tooltip handlers are dead.
 function clearMarks(): void {
-    document.querySelectorAll<HTMLElement>(`[${DATA_ATTR}]`).forEach(target => {
-        target.removeAttribute(DATA_ATTR)
-        target.classList.remove(C.removed)
-        target.querySelector(`.${C.banner}`)?.remove()
-        target.querySelector(`.${C.recovered}`)?.remove()
-    })
+    document.querySelectorAll<HTMLElement>(`[${DATA_ATTR}]`).forEach(unmark)
 }
 
 // Mark one matched anchor's removed item. We outline and host the banner on the
@@ -226,6 +229,9 @@ function mark(block: HTMLElement, anchor: Element, rec: RemovedLite, uuid: strin
     // column only. A post block is vertical and has no nested-reply siblings → it is
     // its own content, so outline the block.
     const target = (blockIsRow && childContaining(block, anchor)) || block
+    // a node the page reused for another item still carries that item's mark
+    const owner = target.getAttribute(DATA_ATTR)
+    if (owner && owner !== uuid) unmark(target)
     if (!target.querySelector(`.${C.banner}`) && !target.classList.contains(C.removed)) {
         target.setAttribute(DATA_ATTR, uuid)
         target.classList.add(C.removed)
@@ -272,28 +278,52 @@ function syncRestored(target: HTMLElement, anchor: Element, rec: RemovedLite): v
     }
 }
 
+// A comment block's own "permalink" link (the one watch-ui keys its button on), not
+// one in a nested reply. Null when the block shows none.
+function ownPermalink(block: HTMLElement): HTMLAnchorElement | null {
+    for (const a of Array.from(block.querySelectorAll<HTMLAnchorElement>('a[href*="/c/"]'))) {
+        if ((a.textContent || '').trim().toLowerCase() === 'permalink' && closestBlock(a, 'comment') === block) return a
+    }
+    return null
+}
+
 export function markComments(): void {
     cleanupBanners()
     if (removedByUuid.size === 0) return
+    // One record per block per pass: the first that claims it. Two records each syncing
+    // the restored box on one block would add and remove it on every pass, forever.
+    const done = new Set<HTMLElement>()
 
     // comments: match the comment uuid in /c/<uuid> links, mark the comment block.
-    // Treat a missing type as 'comment' so records saved before the type field
-    // (and post-time captures) still highlight.
+    // A block is the comment its own permalink names, so a link in its text (or a
+    // "view more" link) to some other removed item doesn't make it that item; a block
+    // with no permalink falls back to any /c/ link in it. Treat a missing type as
+    // 'comment' so records saved before the type field (and post-time captures) still
+    // highlight.
     document.querySelectorAll<HTMLAnchorElement>('a[href*="/c/"]').forEach(a => {
         const uuid = uuidFromHref(a.getAttribute('href') || '')
         const rec = uuid ? removedByUuid.get(uuid) : undefined
         if (!rec || rec.type === 'post') return
         const block = closestBlock(a, 'comment')
-        if (block) mark(block, a, rec, uuid!)
+        if (!block || done.has(block)) return
+        const own = ownPermalink(block)
+        if (own && uuidFromHref(own.getAttribute('href') || '') !== uuid) return
+        done.add(block)
+        mark(block, own || a, rec, uuid!)
     })
 
-    // posts: match the post uuid in /p/<uuid> links, mark the post block
+    // posts: match the post uuid in /p/<uuid> links, mark the post block (a comment's
+    // permalink names its post too, so those don't count)
     document.querySelectorAll<HTMLAnchorElement>('a[href*="/p/"]').forEach(a => {
-        const uuid = postUuidFromHref(a.getAttribute('href') || '')
+        const href = a.getAttribute('href') || ''
+        if (isCommentHref(href)) return
+        const uuid = postUuidFromHref(href)
         const rec = uuid ? removedByUuid.get(uuid) : undefined
         if (!rec || rec.type !== 'post') return
         const block = closestBlock(a, 'post')
-        if (block) mark(block, a, rec, uuid!)
+        if (!block || done.has(block)) return
+        done.add(block)
+        mark(block, a, rec, uuid!)
     })
 }
 

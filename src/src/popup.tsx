@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getRemoved, getOwnItems, getLastOrigin, getLastCheck, type RemovedRecord } from './storage'
-import { sendMessage } from './ui-common'
+import { displayStatus, sendMessage } from './ui-common'
 import { permalink } from './common'
 import { winDomainOf, HOME_COMMUNITY } from './constants'
 import api from './api'
@@ -40,7 +40,7 @@ const openPage = (file: string) => api.tabs.create({ url: api.runtime.getURL(fil
 // A compact, scannable removal row (the popup keeps it terse; the history page has full detail).
 function RemovedRow({ rec, origin }: { rec: RemovedRecord; origin?: string }) {
     const reapproved = !!rec.reapproved_utc
-    const cls = reapproved ? 'reapproved' : rec.status
+    const cls = displayStatus(rec)
     const isPost = rec.type === 'post'
     return (
         <a

@@ -131,4 +131,16 @@ function main() {
     captureLoop()
     // a copy orphaned by an extension update stops re-checking the session
     const authTimer = setInterval(() => (extensionAlive() ? sendAuth() : clearInterval(authTimer)), 5 * 60 * 1000)
+    // Logging in through the site's pop-up doesn't reload the page, and the tab keeps
+    // this one copy, so watch for the session's tokens to appear or change: a
+    // localStorage read every 2 s, and a check with the site only when they do.
+    const tokens = () => `${localStorage.getItem('api_key') || ''}|${localStorage.getItem('api_secret') || ''}`
+    let seenTokens = tokens()
+    const tokenWatch = setInterval(() => {
+        if (!extensionAlive()) return clearInterval(tokenWatch)
+        const now = tokens()
+        if (now === seenTokens) return
+        seenTokens = now
+        if (now !== '|') sendAuth()
+    }, 2000)
 }

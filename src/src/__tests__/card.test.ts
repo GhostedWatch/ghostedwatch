@@ -20,6 +20,15 @@ const rec = (over: Partial<RemovedRecord>): RemovedRecord => ({
 })
 
 describe('wrapLines', () => {
+    it('never cuts an emoji in half, so the card can still be encoded', () => {
+        const lines = wrapLines('😀'.repeat(70) + ' ok', 58)
+        expect(lines).toEqual(['😀'.repeat(58), '😀'.repeat(12) + ' ok'])
+        for (const l of lines) expect(() => encodeURIComponent(l)).not.toThrow()
+        // an odd start puts a 58-unit cut inside a pair
+        const odd = wrapLines('x' + '😀'.repeat(70), 58)
+        expect(odd).toEqual(['x' + '😀'.repeat(57), '😀'.repeat(13)])
+        for (const l of odd) expect(() => encodeURIComponent(l)).not.toThrow()
+    })
     it('wraps by word within the char budget', () => {
         expect(wrapLines('a b c d e', 3)).toEqual(['a b', 'c d', 'e'])
     })

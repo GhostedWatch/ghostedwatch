@@ -1,6 +1,6 @@
 import React from 'react'
 import type { RemovedRecord } from './storage'
-import { statusLabel } from './ui-common'
+import { displayStatus, statusLabel } from './ui-common'
 import { permalink } from './common'
 import { prettyAgo, prettyDuration, fullTimestamp } from './time'
 import { Tooltip } from './Tooltip'
@@ -25,7 +25,7 @@ export function RemovedItemView({
     const isPost = rec.type === 'post'
     const reapproved = !!rec.reapproved_utc
     const other = rec.source === 'other' // someone else's content the user watched
-    const cls = reapproved ? 'reapproved' : rec.status
+    const cls = displayStatus(rec)
     const kind = isPost ? 'post' : 'comment'
     const observed = `observed ${fullTimestamp(rec.observed_utc)}${rec.created ? ` · posted ${fullTimestamp(rec.created)}` : ''}`
     return (
@@ -83,7 +83,10 @@ export function RemovedItemView({
                     ) : null}
                     <Tooltip text={observed}>
                         observed {prettyAgo(rec.observed_utc)}
-                        {rec.created ? ` · ${prettyDuration(rec.observed_utc - rec.created)} after posting` : ''}
+                        {/* a history-scan find was removed some unknown time before the scan */}
+                        {rec.created && !rec.backfill
+                            ? ` · ${prettyDuration(rec.observed_utc - rec.created)} after posting`
+                            : ''}
                     </Tooltip>
                     {reapproved ? (
                         <span>

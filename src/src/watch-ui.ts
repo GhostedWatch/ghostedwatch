@@ -19,8 +19,9 @@ import { NS, APP_NAME, GHOST_PATH } from './constants'
 import { uuidToId } from './win-api'
 import { uuidFromHref, postUuidFromHref, attachTip, setTip, isRemovedUuid, closestBlock } from './highlight'
 import api, { extensionAlive } from './api'
-import { getOptions } from './storage'
+import { getOptions, watchedIds, autoCommentRoom, type OtherItem } from './storage'
 import { isRemovalPlaceholder } from './removal-sources'
+import { MENU_FULL_NOTE } from './ui-common'
 
 const ACCENT = '#d93a00'
 const BTN = `${NS}-watch`
@@ -36,6 +37,8 @@ interface WatchCtx {
 
 let watched = new Set<number>()
 let enabled = true // mirrors the `watchButtons` option
+// how many more comments whole-post watches may follow (autoCommentRoom); unknown = room
+let autoRoom = Infinity
 
 function send<T = unknown>(msg: unknown): Promise<T> {
     return api.runtime.sendMessage(msg)
@@ -111,7 +114,9 @@ function buildButton(ctx: WatchCtx): HTMLElement {
 async function start(btn: HTMLElement, ctx: WatchCtx, watchComments?: boolean): Promise<void> {
     renderState(btn, true) // optimistic
     watched.add(ctx.id)
-    await send({ action: 'watch-other', item: { ...ctx, watch_comments: watchComments } })
+    // what the tooltip promised: an item the page shows as removed is watched for a re-approval
+    const removed = isRemovedUuid(ctx.uuid) || pageShowsRemoved(btn.parentElement)
+    await send({ action: 'watch-other', item: { ...ctx, watch_comments: watchComments, removed } })
 }
 
 // Small popover for posts: watch just the post, or the post and all its comments.
@@ -137,6 +142,13 @@ function showPostMenu(anchor: HTMLElement, onChoose: (watchComments: boolean) =>
         return b
     }
     menu.append(opt('Watch this post only', false), opt('Watch post + all comments', true))
+    if (autoRoom <= 0) {
+        // the thread watch still starts, and follows comments once there's room
+        const note = document.createElement('div')
+        note.className = `${NS}-watch-note`
+        note.textContent = MENU_FULL_NOTE
+        menu.append(note)
+    }
     document.body.appendChild(menu)
     const r = anchor.getBoundingClientRect()
     menu.style.left = `${window.scrollX + r.left}px`
@@ -235,6 +247,8 @@ function injectStyles(): void {
         .${NS}-watch-mi { all: unset; display: block; box-sizing: border-box; width: 100%; padding: 10px 13px;
             cursor: pointer; color: #1a1a1b; }
         .${NS}-watch-mi:hover { background: #f0f1f2; }
+        .${NS}-watch-note { box-sizing: border-box; width: 0; min-width: 100%; padding: 0 13px 10px;
+            font-size: 12px; font-weight: 400; color: #8a5a00; white-space: normal; }
     `
     ;(document.head || document.documentElement).appendChild(style)
 }
@@ -243,8 +257,9 @@ let observer: MutationObserver | null = null
 export async function startWatchButtons(): Promise<void> {
     injectStyles()
     enabled = (await getOptions()).watchButtons !== false
-    const resp = await send<{ ids?: number[] }>({ action: 'list-other' })
+    const resp = await send<{ ids?: number[]; autoRoom?: number }>({ action: 'list-other' })
     watched = new Set(resp?.ids || [])
+    autoRoom = resp?.autoRoom ?? Infinity
     // buttons already here were left by a copy orphaned by an extension update, and
     // their clicks go nowhere: replace them
     removeAllButtons()
@@ -260,8 +275,15 @@ export async function startWatchButtons(): Promise<void> {
         }, 300)
     })
     observer.observe(document.documentElement, { childList: true, subtree: true })
-    // react live to the options toggle
     api.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+        // keep the buttons in step with what's watched: an unwatch on the Watching page,
+        // the comments a whole-post watch adds, a watch made in another tab
+        if (area === 'local' && changes.other_items) {
+            const map = (changes.other_items.newValue as Record<string, OtherItem> | undefined) || {}
+            setWatchedIds(watchedIds(map))
+            autoRoom = autoCommentRoom(map)
+        }
+        // react live to the options toggle
         if (area !== 'sync' || !changes.options) return
         enabled = (changes.options.newValue as { watchButtons?: boolean } | undefined)?.watchButtons !== false
         if (enabled) injectWatchButtons()

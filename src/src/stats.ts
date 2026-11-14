@@ -36,6 +36,9 @@ const CSV_COLS: Array<[string, (r: RemovedRecord) => string]> = [
     ['text', r => r.text || ''],
 ]
 function csvField(s: string): string {
+    // Text from comments (other people's too, for watched items) must not become a
+    // formula when the file is opened in a spreadsheet: a leading ' keeps it text.
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 export function toCSV(removed: RemovedRecord[]): string {
@@ -63,13 +66,16 @@ function median(nums: number[]): number | null {
 const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 
 export function computeStats(removed: RemovedRecord[], now: number = Date.now()): Stats {
-    const durations = removed
+    // Records the first-run history scan found carry the scan's time, not the removal's,
+    // so they count in the totals but not in when-it-happened figures.
+    const timed = removed.filter(r => !r.backfill)
+    const durations = timed
         .filter(r => r.created > 0 && r.observed_utc > r.created)
         .map(r => r.observed_utc - r.created)
 
     // last 14 days, with zero-filled gaps, oldest → newest
     const counts = new Map<string, number>()
-    for (const r of removed) counts.set(dayKey(r.observed_utc), (counts.get(dayKey(r.observed_utc)) || 0) + 1)
+    for (const r of timed) counts.set(dayKey(r.observed_utc), (counts.get(dayKey(r.observed_utc)) || 0) + 1)
     const perDay: Array<{ day: string; count: number }> = []
     for (let i = 13; i >= 0; i--) {
         const day = dayKey(now - i * 86400000)
