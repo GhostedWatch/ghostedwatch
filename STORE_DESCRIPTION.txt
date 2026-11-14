@@ -22,6 +22,9 @@ Features:
 Made in America 🇺🇸 · Independent and private by design.
 
 VERSION HISTORY:
+0.0.6
+Alerts open the removed item, older removals are caught, and logged-out sessions show as disconnected.
+
 0.0.5
 Removal labels now show the actual source, such as spam filter or risk filter.
 
