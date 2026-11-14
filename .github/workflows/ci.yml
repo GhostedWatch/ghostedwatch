@@ -7,7 +7,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: since 2026-11 that's Ubuntu 26.04, where Playwright 1.60 can't
+    # install its Chromium. Move on when a Playwright upgrade supports it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
