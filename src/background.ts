@@ -3,6 +3,7 @@ import { ALARM_NAME, clampInterval, setAlarm, setUnseenBadge, createNotification
 import api from './src/api'
 import { runCycle } from './src/poller'
 import { runOtherCycle, runSourceCycle, watchOtherFromPage } from './src/other'
+import { beginCheck, endCheck, errorText, logEvent, note } from './src/diaglog'
 import {
     getOptions,
     addOwnItem,
@@ -45,13 +46,19 @@ async function cycle() {
     // an extension API call (a pending fetch doesn't count), which would cut a long
     // history scan or watch pass off part-way. A cheap call every 20 s keeps it running.
     const keepAlive = setInterval(() => api.runtime.getPlatformInfo().catch(() => {}), 20000)
+    // what this check did goes in the diagnostic log a problem report carries
+    beginCheck()
+    const failed = (part: string) => (e: unknown) => {
+        dlog(`${part} check failed:`, e)
+        note(`${part} check failed: ${errorText(e)}`)
+    }
     try {
         // Each part stores its own removals as notified before the alerts go out below,
         // so one part failing must not keep the others' alerts from being sent.
-        const own = await runCycle().catch(e => (dlog('own-content check failed:', e), null))
+        const own = await runCycle().catch(e => (failed('own-content')(e), null))
         const origin = await getLastOrigin()
-        const o1 = await runOtherCycle(origin).catch(e => (dlog('watched-items check failed:', e), NO_CHANGES))
-        const o2 = await runSourceCycle(origin).catch(e => (dlog('watched-sources check failed:', e), NO_CHANGES))
+        const o1 = await runOtherCycle(origin).catch(e => (failed('watched-items')(e), NO_CHANGES))
+        const o2 = await runSourceCycle(origin).catch(e => (failed('watched-sources')(e), NO_CHANGES))
         await notifyCycle({
             ownRemoved: own?.removed || [],
             ownReapproved: own?.reapproved || [],
@@ -63,6 +70,7 @@ async function cycle() {
         refreshOpenTabs()
     } finally {
         clearInterval(keepAlive)
+        await endCheck().catch(() => {})
         cycling = false
     }
 }
@@ -217,6 +225,12 @@ async function hasLiveContentScript(tabId: number): Promise<boolean> {
 
 api.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
     dlog('onInstalled:', details.reason)
+    const version = api.runtime.getManifest().version
+    logEvent(
+        details.reason === 'update'
+            ? `updated from ${details.previousVersion} to ${version}`
+            : `${details.reason === 'install' ? 'installed' : details.reason} ${version}`,
+    ).catch(() => {})
     await init()
     const winTabs = await injectIntoOpenTabs()
     dlog('content script live in', winTabs, 'open .win tab(s)')
@@ -228,6 +242,7 @@ api.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDeta
     }
 })
 api.runtime.onStartup.addListener(() => {
+    logEvent('browser started').catch(() => {})
     init()
     cycle()
 })
@@ -247,7 +262,10 @@ async function alarmWatchdog() {
         await new Promise(r => setTimeout(r, 65000))
         const interval = clampInterval((await getOptions()).interval || INTERVAL_DEFAULT)
         // the alarm is lost only once two of the user's own periods pass without it
-        if (Date.now() - (await getLastAlarm()) > 2 * interval * 60000 + 10000) setAlarm(interval)
+        if (Date.now() - (await getLastAlarm()) > 2 * interval * 60000 + 10000) {
+            logEvent('the check timer had stopped: restarted it').catch(() => {})
+            setAlarm(interval)
+        }
     }
 }
 alarmWatchdog()
@@ -279,8 +297,13 @@ api.notifications.onClicked.addListener(async (notifId: string) => {
 
 api.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area === 'sync' && changes.options) {
-        const interval = (changes.options.newValue as { interval?: number })?.interval || INTERVAL_DEFAULT
+        const o = (changes.options.newValue || {}) as { interval?: number; notifyMode?: string; watchButtons?: boolean }
+        const interval = o.interval || INTERVAL_DEFAULT
         setAlarm(interval)
+        logEvent(
+            `options: checks every ${clampInterval(interval)} min, alerts ${o.notifyMode || 'each'}, ` +
+                `Watch buttons ${o.watchButtons === false ? 'off' : 'on'}`,
+        ).catch(() => {})
     }
 })
 
@@ -365,6 +388,10 @@ api.runtime.onMessage.addListener((message: Message, _sender: chrome.runtime.Mes
                 if (changed) {
                     await setAuth(a)
                     dlog('auth stored for', a.user, '@', a.origin)
+                    // the log never names the account; a new or switched one is worth a line
+                    const host = new URL(a.origin).host
+                    if (!prev) logEvent(`connected (${host})`).catch(() => {})
+                    else if (prev.user !== a.user) logEvent(`connected to another account (${host})`).catch(() => {})
                 }
                 sendResponse({ ok: true })
                 if (changed) cycle()

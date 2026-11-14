@@ -1,7 +1,7 @@
 // Helpers for the .win sites (patriots.win / scored.co /
-// communities.win — all the same backend): id<->uuid encoding and the normalized
-// shape of the user's own comments. All authenticated network calls are made by
-// the content script in the site's own session; this module stays pure/typed.
+// communities.win — all the same backend): id<->uuid encoding, the normalized
+// shape of the user's own comments, and apiGet, which the background's checks use.
+import { noteRequest } from './diaglog'
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
@@ -88,9 +88,26 @@ export async function apiGet<T = any>(origin: string, path: string, apiKey?: str
         headers['X-Api-Key'] = apiKey
         headers['X-Api-Secret'] = apiSecret
     }
-    const res = await fetch(`${origin}/api/v2/${path}`, { credentials: 'omit', headers })
-    if (!res.ok) throw new Error(`win-api ${res.status} for ${path}`)
-    return (await res.json()) as T
+    // every request goes in the check's diagnostic log, with how it failed if it did
+    let failure = ''
+    try {
+        const res = await fetch(`${origin}/api/v2/${path}`, { credentials: 'omit', headers })
+        if (!res.ok) {
+            failure = `HTTP ${res.status}`
+            throw new Error(`win-api ${res.status} for ${path.split('?')[0]}`)
+        }
+        try {
+            return (await res.json()) as T
+        } catch (e) {
+            failure = 'not JSON'
+            throw e
+        }
+    } catch (e) {
+        failure ||= 'no answer'
+        throw e
+    } finally {
+        noteRequest(path, failure || undefined)
+    }
 }
 
 // content/profile.json mixes the user's posts and comments. A comment carries a

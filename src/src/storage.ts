@@ -153,7 +153,7 @@ function syncSet(obj: Record<string, unknown>): Promise<void> {
 // message), so queueing here keeps two writers from interleaving: a check cycle's write
 // can't undo a watch or an unwatch that landed while it was busy.
 const queues = new Map<string, Promise<unknown>>()
-function locked<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export function locked<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const run = (queues.get(key) || Promise.resolve()).then(fn)
     queues.set(key, run.catch(() => undefined))
     return run

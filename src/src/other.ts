@@ -35,6 +35,7 @@ import {
     type WatchSource,
 } from './storage'
 import { setUnseenBadge } from './common'
+import { note, idList } from './diaglog'
 
 // Capture a post/comment the user just clicked Watch on. Given only the ids from the
 // page, fetch the public thread once to fill in author/title/text/created accurately
@@ -303,6 +304,8 @@ async function commitOutcomes(
     newlyReapproved: OtherItem[],
 ): Promise<{ removed: OtherItem[]; reapproved: OtherItem[] }> {
     const now = Date.now()
+    if (newlyRemoved.length) note(`watched, removed: ${idList(newlyRemoved.map(x => x.w))}`)
+    if (newlyReapproved.length) note(`watched, re-approved: ${idList(newlyReapproved)}`)
     for (const { w, hidden } of newlyRemoved) await recordOtherRemoval(w, hidden)
     for (const w of newlyReapproved) {
         await markReapproved(w.id, now)

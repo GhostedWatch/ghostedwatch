@@ -11,6 +11,7 @@ import {
     type PublicViewResponse,
 } from './win-api'
 import { processProfileComments } from './monitoring'
+import { note, noteNoSession, idList } from './diaglog'
 import {
     getAuth,
     forgetAuth,
@@ -57,6 +58,7 @@ async function sessionAccepted(auth: { origin: string; apiKey: string; apiSecret
     // This request goes by the tokens alone: cookies, even good ones, don't change the
     // answer (checked on the site 2026-11-14), so it agrees with the page's own check.
     if (data?.status === false && data?.error === 'invalid user' && !data?.users?.length) {
+        note('the site refused the session: disconnected')
         await forgetAuth(auth)
         return false
     }
@@ -81,7 +83,10 @@ export async function runCycle(): Promise<{
     backfill: boolean
 } | null> {
     const auth = await getAuth()
-    if (!auth) return null
+    if (!auth) {
+        noteNoSession()
+        return null
+    }
     const { user, origin, apiKey, apiSecret } = auth
     const backfill = !(await isBackfilled(user))
     // (a last read in the future means the clock was set back since: read now)
@@ -95,6 +100,7 @@ export async function runCycle(): Promise<{
     let postsSeen = 0
     let commentsSeen = 0
     let answered = false // the profile answered at least its first page
+    let pages = 0
     const maxPages = backfill ? MAX_BACKFILL_PAGES : deep ? DEEP_PAGES : 1
     for (let page = 0; page < maxPages; page++) {
         const cursor = page === 0 ? '' : `&post=${postsSeen}&comment=${commentsSeen}`
@@ -105,8 +111,12 @@ export async function runCycle(): Promise<{
             break
         }
         const raw = data?.content
-        if (!Array.isArray(raw)) break
+        if (!Array.isArray(raw)) {
+            note(`profile page ${page + 1} came back without its items`)
+            break
+        }
         answered = true
+        pages++
         if (raw.length === 0) break
         for (const r of raw) {
             if (isCommentRaw(r)) commentsSeen++
@@ -122,6 +132,9 @@ export async function runCycle(): Promise<{
     // stays due for the next cycle. A scan that fails part-way still counts as done, so
     // a page that keeps failing can't make every cycle walk the history again.
     if (!answered) return null
+    if (backfill || deep) {
+        note(`${backfill ? 'history scan' : 'read further back'}: ${pages} page${pages === 1 ? '' : 's'}, ${items.length} items`)
+    }
     // The profile answers anyone. For tokens the site no longer accepts it quietly
     // returns the public view, which leaves out everything hidden from others. (Getting
     // new tokens doesn't cancel the old ones, checked 2026-11-14.) So about once an hour
@@ -153,6 +166,9 @@ export async function runCycle(): Promise<{
             /* storage trouble: page 1's alerts still go out */
         }
     }
+
+    if (removed.length) note(`removed: ${idList(removed)}`)
+    if (reapproved.length) note(`re-approved: ${idList(reapproved)}`)
 
     // From here on nothing may throw: the removals above are already recorded as
     // notified, so their alerts must still go out.
@@ -197,7 +213,10 @@ export async function runCycle(): Promise<{
                 const path = type === 'post' ? `post/post.json?id=${id}` : `comment/thread?id=${id}`
                 const d = await apiGet<PublicViewResponse>(origin, path)
                 const result = classifyPublicView(type, id, d)
-                if (result === 'live') await unrecordRemoval(id)
+                if (result === 'live') {
+                    note(`#${id} is visible to others: not removed after all`)
+                    await unrecordRemoval(id)
+                }
                 else await setRemovedAudit(id, result === 'absent')
             } catch {
                 await noteAuditAttempt(id)
