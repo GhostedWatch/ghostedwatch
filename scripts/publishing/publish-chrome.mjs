@@ -11,6 +11,7 @@ import { loadDotEnv } from '../lib/env.mjs'
 import {
     CONFIG, c, getManifest, readDescription, assertVersionInDescription,
     copyToClipboard, openUrl, prompt, requireEnv, setupAbortHandler, isInteractive,
+    buildFresh, markPublished,
 } from './common.mjs'
 
 setupAbortHandler()
@@ -39,7 +40,7 @@ async function accessToken() {
 
 const headers = token => ({ Authorization: `Bearer ${token}`, 'x-goog-api-version': '2' })
 
-async function uploadAndPublish() {
+async function uploadAndPublish(commit) {
     const token = await accessToken()
     const id = process.env.CHROME_EXTENSION_ID
 
@@ -72,8 +73,10 @@ async function uploadAndPublish() {
     const pub = await (await fetch(`${API}/chromewebstore/v1.1/items/${id}/publish`, {
         method: 'POST', headers: headers(token),
     })).json()
-    if (pub.status?.[0] === 'OK') console.log(c.green('✔ Published! (goes live once review clears)'))
-    else {
+    if (pub.status?.[0] === 'OK') {
+        console.log(c.green('✔ Published! (goes live once review clears)'))
+        markPublished('chrome', commit)
+    } else {
         console.error(c.red('Publish failed or returned warnings:'), JSON.stringify(pub))
         process.exit(1)
     }
@@ -87,15 +90,10 @@ async function main() {
 
     // Always upload a freshly built chrome.zip — a stale one could be from an
     // older commit. (Dev builds live in dist-chrome-dev/, so no dev-leak risk.)
-    console.log(c.yellow('Building production chrome.zip...'))
-    const build = spawnSync('yarn', ['build-chrome'], { stdio: 'inherit' })
-    if (build.status !== 0 || !fs.existsSync(CONFIG.chromeZip)) {
-        console.error(c.red('build-chrome failed.'))
-        process.exit(1)
-    }
+    const commit = buildFresh('build-chrome', CONFIG.chromeZip)
 
     try {
-        await uploadAndPublish()
+        await uploadAndPublish(commit)
     } catch (error) {
         if (!error.invalidGrant) throw error
         console.error('\n' + c.red('Chrome Web Store token expired or invalid.'))
@@ -114,7 +112,7 @@ async function main() {
         delete process.env.CHROME_REFRESH_TOKEN // re-read the value the refresh flow just saved
         loadDotEnv()
         console.log('\n' + c.green('✔ Token refreshed — retrying...'))
-        await uploadAndPublish()
+        await uploadAndPublish(commit)
     }
 }
 

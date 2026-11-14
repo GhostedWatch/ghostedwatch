@@ -5,11 +5,12 @@
 // without publishing. The add-on id defaults from the built manifest's gecko id.
 import fs from 'fs'
 import path from 'path'
-import { execSync, spawnSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import webExt from 'web-ext'
 import {
     CONFIG, ROOT, c, getManifest, readDescription, assertVersionInDescription,
-    amoJwt, requireEnv, setupAbortHandler,
+    amoJwt, requireEnv, setupAbortHandler, buildFresh, markPublished,
+    readPublishStatus, writePublishStatus, extensionChangedSince,
 } from './common.mjs'
 
 setupAbortHandler()
@@ -25,12 +26,32 @@ function extensionId() {
     }
 }
 
-function createSourceZip() {
+function createSourceZip(commit) {
     console.log('\n' + c.yellow('[1/3] Zipping source for review...'))
-    // Committed files only — never .env or other untracked/ignored content.
-    execSync('git archive --format=zip -o source.zip HEAD', { cwd: ROOT, stdio: 'inherit' })
-    console.log(c.green('✔ source.zip written (git archive HEAD)'))
+    // The commit that was built, committed files only — never .env or other
+    // untracked/ignored content.
+    execFileSync('git', ['archive', '--format=zip', '-o', 'source.zip', commit], { cwd: ROOT, stdio: 'inherit' })
+    console.log(c.green(`✔ source.zip written (git archive ${commit.slice(0, 7)})`))
     return CONFIG.sourceZip
+}
+
+// AMO refused the version as one it already has: an earlier run submitted it and
+// stopped before recording it. That counts as published only if every earlier
+// submission, any of which AMO may have kept, was these files.
+function acceptExistingVersion(version, submission, earlier) {
+    const status = readPublishStatus()
+    // AMO refused this one, so it holds none of its files
+    status.firefoxSubmissions = (status.firefoxSubmissions || []).filter(s => s.at !== submission.at)
+    writePublishStatus(status)
+    if (earlier.length && earlier.every(s => !extensionChangedSince(s.commit))) {
+        console.warn(c.yellow(`AMO already has ${version} from this code (submitted ${earlier.at(-1).at}); recording it as published.`))
+    } else if (process.env.PUBLISH_FIREFOX_ACCEPT_EXISTING) {
+        console.warn(c.yellow(`AMO already has ${version}; recording it as published (PUBLISH_FIREFOX_ACCEPT_EXISTING).`))
+    } else {
+        console.error(c.red(`AMO already has ${version}, and nothing here shows it was submitted from these files.`))
+        console.error('Bump the version, or if you know AMO has this code, run again with PUBLISH_FIREFOX_ACCEPT_EXISTING=1.')
+        process.exit(1)
+    }
 }
 
 async function updateStoreListing(version) {
@@ -74,28 +95,41 @@ async function main() {
 
     // Always sign a freshly built dist-firefox — a stale one could be from an
     // older commit. (Dev builds live in dist-firefox-dev/, so no dev-leak risk.)
-    console.log(c.yellow('Building production dist-firefox...'))
-    const build = spawnSync('yarn', ['build-firefox'], { stdio: 'inherit' })
-    if (build.status !== 0 || !fs.existsSync(path.join(CONFIG.firefoxDist, 'manifest.json'))) {
-        console.error(c.red('build-firefox failed.'))
-        process.exit(1)
-    }
+    const commit = buildFresh('build-firefox', path.join(CONFIG.firefoxDist, 'manifest.json'))
+    const sourceZip = createSourceZip(commit)
 
-    const sourceZip = createSourceZip()
+    // Each submission of this version is recorded before AMO sees it: when a run
+    // stops after AMO has the version, the next run's "already exists" is checked
+    // against the code of each submission AMO may have kept
+    const status = readPublishStatus()
+    const earlier = status.firefoxSubmissions || []
+    const submission = { commit, at: new Date().toISOString() }
+    writePublishStatus({ ...status, firefoxSubmissions: [...earlier, submission] })
+
     console.log('\n' + c.yellow('[2/3] Signing & submitting to AMO (listed channel)...'))
-    await webExt.cmd.sign(
-        {
-            apiKey: process.env.FIREFOX_JWT_ISSUER,
-            apiSecret: process.env.FIREFOX_JWT_SECRET,
-            sourceDir: CONFIG.firefoxDist,
-            artifactsDir: path.join(ROOT, 'web-ext-artifacts'),
-            channel: 'listed',
-            amoBaseUrl: 'https://addons.mozilla.org/api/v5/',
-            uploadSourceCode: sourceZip,
-        },
-        { shouldExitProgram: false },
-    )
-    console.log(c.green('✔ Submitted to AMO! (review usually clears quickly)'))
+    try {
+        await webExt.cmd.sign(
+            {
+                apiKey: process.env.FIREFOX_JWT_ISSUER,
+                apiSecret: process.env.FIREFOX_JWT_SECRET,
+                sourceDir: CONFIG.firefoxDist,
+                artifactsDir: path.join(ROOT, 'web-ext-artifacts'),
+                channel: 'listed',
+                amoBaseUrl: 'https://addons.mozilla.org/api/v5/',
+                uploadSourceCode: sourceZip,
+                // Return once AMO has the version. Waiting for approval (15 min by
+                // default) threw after the version already existed on AMO, and
+                // every rerun then failed on it (reveddit, 2026-10).
+                approvalTimeout: 0,
+            },
+            { shouldExitProgram: false },
+        )
+        console.log(c.green('✔ Submitted to AMO! (review usually clears quickly)'))
+    } catch (error) {
+        if (!/already exists/i.test(String(error?.message || error))) throw error
+        acceptExistingVersion(version, submission, earlier)
+    }
+    markPublished('firefox', commit)
     fs.rmSync(sourceZip, { force: true })
 
     await updateStoreListing(version)

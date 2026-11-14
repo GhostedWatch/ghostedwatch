@@ -14,3 +14,4 @@ playwright-report/
 .e2e-user-data/
 web-ext-artifacts/
 .claude-mcp/
+.publish-status.json

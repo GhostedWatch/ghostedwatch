@@ -143,16 +143,19 @@ https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate
 AMO keys — https://addons.mozilla.org/developers/addon/api/key/.
 
 ```bash
-yarn publish:all           # preflight → publish Chrome → publish Firefox
+yarn publish:all           # checks → preflight → Chrome (waits for you) → Firefox
+                           #   (only waits on AMO); a rerun publishes only to the
+                           #   stores still missing this version
 yarn publish:chrome        # CWS: fresh prod build → upload zip → pauses while you
                            #   paste the description (the CWS API can't update listing
                            #   text; it's copied to your clipboard + the dashboard
                            #   opens) → publish. Expired refresh token? It offers
                            #   `yarn refresh:chrome` (localhost OAuth flow that
                            #   rewrites .env) and retries.
-yarn publish:firefox       # AMO: fresh prod build → source.zip (git archive HEAD —
-                           #   commit first!) → web-ext sign (listed) → updates the
-                           #   store description through the AMO API.
+yarn publish:firefox       # AMO: fresh prod build → source.zip (git archive of the
+                           #   built commit) → web-ext sign (listed; returns once AMO
+                           #   has the version, without waiting for approval) →
+                           #   updates the store description through the AMO API.
 yarn publish:firefox:text  # only push STORE_DESCRIPTION.txt to the AMO listing
 ```
 
@@ -162,6 +165,19 @@ Once it passes, the same code skips it for 24 hours (the key hashes every
 tracked or untracked-but-not-ignored file plus the test settings), so retrying
 a publish that failed for another reason starts right away;
 `PREFLIGHT_FORCE=1` runs it anyway.
+
+A store that fails doesn't stop the other. Each store that takes the current
+version is recorded in `.publish-status.json` (gitignored), so after fixing a
+failure (an expired token, say), run `yarn publish:all` again: it publishes only
+to the stores still missing this version. `publish:chrome` and `publish:firefox`
+record their store the same way. Every publish refuses uncommitted or untracked
+changes to the extension's files (everything but tests, scripts, docs and repo
+config), so each store's version is a commit, and refuses to give a store
+other code under a version another store already has: bump the version instead.
+If a Firefox run stopped after AMO took the version, the rerun's "already exists"
+counts as published when every earlier submission of that version was this code;
+`PUBLISH_FIREFOX_ACCEPT_EXISTING=1` accepts it otherwise.
+
 Dev builds go to `dist-*-dev/`, prod to `dist-*/` — and the publish scripts each
 rebuild their production artifact right before uploading, so nothing stale (or
 dev) can end up in a store submission.
