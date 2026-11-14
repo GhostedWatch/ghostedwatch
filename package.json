@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:firefox": "node scripts/ff-probe.mjs",
+    "test:api": "node scripts/api-contract.mjs",
     "e2e:login": "node tests/e2e/login.mjs",
     "source:zip": "git archive --format=zip -o source.zip HEAD",
     "preflight": "node scripts/preflight-cache.mjs yarn preflight:run",

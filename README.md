@@ -106,6 +106,10 @@ yarn test:firefox    # headless-Firefox smoke test over Marionette: installs the
                      #   in .env it also does a REAL login and asserts live session
                      #   capture. Build with build-firefox-dev first (dev builds
                      #   carry the data-gw-* breadcrumbs the test reads).
+yarn test:api        # live, no login: checks that the site's API still has the
+                     #   fields the extension reads (6 GETs, 1 s apart). Exit 0 =
+                     #   as expected, 1 = changed, 2 = no answer. For a daily
+                     #   schedule and before each release.
 ```
 
 Load unpacked (dev builds): Chrome → `chrome://extensions` → Developer mode → Load
