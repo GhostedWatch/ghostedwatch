@@ -127,13 +127,37 @@ export const headCommit = () => git('rev-parse', 'HEAD').out
 // can't find counts as changed.
 export const extensionChangedSince = commit => !git('diff', '--quiet', commit, '--', ...BUILD_INPUTS).ok
 
+// The build inputs' uncommitted and untracked changes, one per line ('' for none)
+function buildInputChanges() {
+    const status = git('status', '--porcelain', '--', ...BUILD_INPUTS)
+    return status.ok ? status.out : '(git status failed)'
+}
+
 // Stop unless the build inputs match HEAD, so HEAD is what a build ships (and the
 // Firefox source zip, made from that commit, matches the build).
 export function assertCleanBuildInputs() {
-    const status = git('status', '--porcelain', '--', ...BUILD_INPUTS)
-    if (status.ok && !status.out) return
-    console.error(c.red("The extension's files have uncommitted or untracked changes:") + `\n${status.out}`)
+    const changes = buildInputChanges()
+    if (!changes) return
+    console.error(c.red("The extension's files have uncommitted or untracked changes:") + `\n${changes}`)
     console.error('Commit or stash them first, so the version in each store is a commit.')
+    process.exit(1)
+}
+
+// Stop unless this is the Node that .nvmrc names, which Mozilla's reviewers rebuild
+// with, so their build comes out the same.
+export function assertNodeVersion() {
+    let wanted = ''
+    try {
+        wanted = fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8').trim().replace(/^v/, '')
+    } catch {
+        // missing: nothing names the version, so it's refused below
+    }
+    const running = process.version.slice(1)
+    if (wanted && (running === wanted || running.startsWith(`${wanted}.`))) return
+    console.error(
+        c.red(`This is Node ${running}, but .nvmrc names ${wanted || 'no version'}, which Mozilla's reviewers rebuild with.`),
+    )
+    console.error('Switch with `nvm use`, then run it again.')
     process.exit(1)
 }
 
@@ -192,11 +216,24 @@ export function writePublishStatus(status) {
 export function buildFresh(script, artifact) {
     assertCleanBuildInputs()
     assertSameCodeForVersion()
+    assertNodeVersion()
     const commit = headCommit()
+    // The dependencies yarn.lock names, which a reviewer's rebuild installs: a
+    // merge or checkout can change yarn.lock without anyone running yarn install
+    if (spawnSync('yarn', ['install', '--immutable'], { stdio: 'inherit' }).status !== 0) {
+        console.error(c.red("yarn install --immutable failed, so the build wouldn't use the dependencies yarn.lock names."))
+        process.exit(1)
+    }
     console.log(c.yellow(`Building fresh production package (yarn ${script})...`))
     const build = spawnSync('yarn', [script], { stdio: 'inherit' })
     if (build.status !== 0 || !fs.existsSync(artifact)) {
         console.error(c.red(`${script} failed.`))
+        process.exit(1)
+    }
+    // A file edited while the build ran may be in the build but not in the commit
+    if (buildInputChanges() || extensionChangedSince(commit)) {
+        console.error(c.red("The extension's files changed while it was building, so the build may not match the commit."))
+        console.error('Commit or undo the change, then run it again.')
         process.exit(1)
     }
     return commit

@@ -9,7 +9,9 @@
 import { spawn, spawnSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { c, getManifest, readPublishStatus, assertCleanBuildInputs, assertSameCodeForVersion } from './common.mjs'
+import {
+    c, getManifest, readPublishStatus, assertCleanBuildInputs, assertSameCodeForVersion, assertNodeVersion,
+} from './common.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const stores = [
@@ -46,6 +48,7 @@ console.log(c.cyan(`🚀 Publish all ${version}: Chrome → Firefox (each builds
 // Before the preflight, so a refusal comes at once (each store's build checks again)
 assertCleanBuildInputs()
 assertSameCodeForVersion()
+assertNodeVersion()
 if (stores.every(publishedAt)) {
     console.log(c.green(`✔ Every store already has ${version}.`))
     process.exit(0)

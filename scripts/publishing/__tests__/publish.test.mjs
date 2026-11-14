@@ -13,10 +13,14 @@ const SLOW = { timeout: 60_000 }
 const VERSION = '1.2.3'
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null']
 
+// FAKE_EDIT_DURING=<script>: a file is edited while that yarn script runs.
+// FAKE_INSTALL_FAILS: yarn.lock doesn't match.
 const FAKE_YARN = `#!/bin/sh
 echo "yarn $*" >> "$FAKE_LOG"
+if [ "$1" = "$FAKE_EDIT_DURING" ]; then echo '// edited' >> src/main.ts; fi
 case "$1" in
     preflight) exit "\${FAKE_PREFLIGHT:-0}" ;;
+    install) exit "\${FAKE_INSTALL_FAILS:-0}" ;;
     build-chrome) echo zip > chrome.zip ;;
     build-firefox) mkdir -p dist-firefox && echo '{"browser_specific_settings":{"gecko":{"id":"test@example.com"}}}' > dist-firefox/manifest.json ;;
 esac
@@ -125,6 +129,7 @@ beforeEach(() => {
     write('src/main.ts', 'export const main = 1\n')
     write('src/src/__tests__/main.test.ts', '// a test\n')
     write('README.md', 'readme\n')
+    write('.nvmrc', `${process.version.slice(1)}\n`)
     git('init', '-q')
     commitAll('start')
 })
@@ -201,6 +206,36 @@ describe('yarn publish:all', () => {
         commitAll('bump')
         expect(run('publish-all.mjs').code).toBe(0)
         expect(status().version).toBe('1.2.4')
+    })
+
+    it('stops unless Node is the version .nvmrc names', SLOW, () => {
+        write('.nvmrc', '1.2.3\n')
+        commitAll('another Node')
+        const all = run('publish-all.mjs')
+        expect(all.code).toBe(1)
+        expect(all.out).toContain('.nvmrc names 1.2.3')
+        expect(all.calls).toEqual([])
+        // A store's own script stops too
+        const alone = run('publish-firefox.mjs')
+        expect(alone.code).toBe(1)
+        expect(alone.calls).toEqual([])
+    })
+
+    it("builds with yarn.lock's dependencies, and stops if the extension changes while it builds", SLOW, () => {
+        const r = run('publish-all.mjs', { FAKE_EDIT_DURING: 'build-firefox' })
+        for (const build of ['yarn build-chrome', 'yarn build-firefox']) {
+            expect(r.calls[r.calls.indexOf(build) - 1]).toBe('yarn install --immutable')
+        }
+        expect(r.code).toBe(1)
+        expect(r.out).toContain('changed while it was building')
+        expect(r.calls.some(line => line.startsWith('sign'))).toBe(false)
+        expect(Object.keys(status().published)).toEqual(['chrome'])
+
+        git('checkout', '--', 'src/main.ts')
+        const failed = run('publish-firefox.mjs', { FAKE_INSTALL_FAILS: '1' })
+        expect(failed.code).toBe(1)
+        expect(failed.out).toContain('yarn install --immutable failed')
+        expect(ranFirefox(failed.calls)).toBe(false)
     })
 
     it('records the commit a store was built from, though HEAD moves while its step waits', SLOW, () => {

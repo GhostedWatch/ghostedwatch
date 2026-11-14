@@ -174,6 +174,10 @@ record their store the same way. Every publish refuses uncommitted or untracked
 changes to the extension's files (everything but tests, scripts, docs and repo
 config), so each store's version is a commit, and refuses to give a store
 other code under a version another store already has: bump the version instead.
+Each store's build first runs `yarn install --immutable`, so it uses the
+dependencies `yarn.lock` names. It stops if Node isn't the version `.nvmrc` names
+(reviewers rebuild with it) or if the extension's files change while it builds, so
+Firefox's source zip (the commit) is what was built.
 If a Firefox run stopped after AMO took the version, the rerun's "already exists"
 counts as published when every earlier submission of that version was this code;
 `PUBLISH_FIREFOX_ACCEPT_EXISTING=1` accepts it otherwise.
@@ -184,8 +188,8 @@ dev) can end up in a store submission.
 
 Both flows refuse to run if `STORE_DESCRIPTION.txt` has no entry for the current
 manifest version. AMO requires human-readable source for webpack-bundled
-submissions — reviewers rebuild with the steps in **Develop** above (Node 20,
-`yarn install`, `yarn build-firefox`).
+submissions — reviewers rebuild with the steps in **Develop** above (the Node
+version in `.nvmrc`, `yarn install`, `yarn build-firefox`).
 
 CI alternative: tag `v<version>` (must equal `src/manifest.json` version) and push —
 `release.yml` builds, publishes both stores (secrets: `CWS_*`, `AMO_JWT_*`), and
