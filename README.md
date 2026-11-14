@@ -92,7 +92,9 @@ yarn build-firefox-dev  # DEV -> dist-firefox-dev/  — dev and prod never share
 yarn test:e2e        # Playwright: loads the real built extension in Chromium and
                      #   checks the popup/options/history pages. Runs headless (no
                      #   window); WIN_E2E_HEADED=1 shows the browser. Live-site runs
-                     #   (WIN_E2E_LIVE / WIN_E2E_NET) stay headed.
+                     #   (WIN_E2E_LIVE / WIN_E2E_NET) stay headed. Other runs can't
+                     #   reach the real sites: their hosts don't resolve, and pages
+                     #   come from routed fakes.
                      #   First time: `yarn playwright install chromium`.
 yarn e2e:login       # one-time: opens Chromium with the extension + a persistent
                      #   profile; log in by hand, press Enter to save the session.

@@ -35,11 +35,18 @@ export const credentials = {
 // `yarn e2e:login`; otherwise use a throwaway profile for the page smoke tests.
 export const profileDir = process.env.WIN_E2E_LIVE ? path.join(__dirname, '..', '..', '.e2e-user-data') : ''
 
+const live = !!(process.env.WIN_E2E_LIVE || process.env.WIN_E2E_NET)
+
 export const launchArgs = [
     `--disable-extensions-except=${extensionPath}`,
     `--load-extension=${extensionPath}`,
     '--no-first-run',
     '--disable-gpu',
+    // Offline runs never reach the real sites. The tab the extension opens on install
+    // (patriots.win) would otherwise load the live homepage in every fresh profile, and its
+    // content script's messages land in tests that count messages. Routed fakes still work:
+    // a fulfilled route never resolves the host.
+    ...(live ? [] : ['--host-resolver-rules=MAP patriots.win ~NOTFOUND, MAP *.patriots.win ~NOTFOUND, MAP scored.co ~NOTFOUND, MAP *.scored.co ~NOTFOUND, MAP *.win ~NOTFOUND']),
 ]
 export { extensionPath }
 
@@ -47,7 +54,7 @@ export { extensionPath }
 // (unlike the default headless shell) loads extensions. Runs against the live site stay
 // headed, since its bot checks are more likely to flag a headless browser.
 // WIN_E2E_HEADED=1 shows the window for any run.
-const headed = !!(process.env.WIN_E2E_HEADED || process.env.WIN_E2E_LIVE || process.env.WIN_E2E_NET)
+const headed = !!(process.env.WIN_E2E_HEADED || live)
 
 export const test = base.extend({
     // eslint-disable-next-line no-empty-pattern
