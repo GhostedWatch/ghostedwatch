@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { APP_NAME } from './constants'
 import { EyeMark } from './Ghost'
+import { openReport } from './report'
 
 const SITE = 'https://ghostedwatch.com/'
 
@@ -174,7 +175,8 @@ function Help() {
                     <p>
                         No analytics, no tracking, no third-party servers. It only talks to the .win site you're already
                         using, and it never posts, votes, or edits on your behalf. You can turn the in-page Watch buttons
-                        off in Options.
+                        off in Options. If you report a problem, the report goes only where you send it, after you
+                        press Send, and you can see everything in it first.
                     </p>
                 </div>
 
@@ -183,8 +185,14 @@ function Help() {
                         ghostedwatch.com
                     </a>
                     <span className="help-foot-sep">·</span>
-                    <a href={`${SITE}feedback.html`} target="_blank" rel="noreferrer">
-                        Send Feedback
+                    <a
+                        href={`${SITE}feedback.html`}
+                        onClick={e => {
+                            e.preventDefault()
+                            openReport()
+                        }}
+                    >
+                        Report a problem or send feedback
                     </a>
                 </div>
             </div>

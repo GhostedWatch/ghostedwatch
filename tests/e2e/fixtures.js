@@ -42,11 +42,11 @@ export const launchArgs = [
     `--load-extension=${extensionPath}`,
     '--no-first-run',
     '--disable-gpu',
-    // Offline runs never reach the real sites. The tab the extension opens on install
+    // Offline runs never reach the real sites (or the website, which the report link opens). The tab the extension opens on install
     // (patriots.win) would otherwise load the live homepage in every fresh profile, and its
     // content script's messages land in tests that count messages. Routed fakes still work:
     // a fulfilled route never resolves the host.
-    ...(live ? [] : ['--host-resolver-rules=MAP patriots.win ~NOTFOUND, MAP *.patriots.win ~NOTFOUND, MAP scored.co ~NOTFOUND, MAP *.scored.co ~NOTFOUND, MAP *.win ~NOTFOUND']),
+    ...(live ? [] : ['--host-resolver-rules=MAP patriots.win ~NOTFOUND, MAP *.patriots.win ~NOTFOUND, MAP scored.co ~NOTFOUND, MAP *.scored.co ~NOTFOUND, MAP *.win ~NOTFOUND, MAP ghostedwatch.com ~NOTFOUND']),
 ]
 export { extensionPath }
 

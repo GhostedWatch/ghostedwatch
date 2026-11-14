@@ -65,6 +65,18 @@ extension tag (click → options) and a removal-source pill ("community filter" 
 found the public can't see it at all. A `MutationObserver` re-marks items loaded
 later (SPA navigation, "load more").
 
+**Problem reports**: the background keeps a diagnostic log of its checks
+(`diaglog.ts`): which requests went out and how they failed, the session check,
+removals and re-approvals by item id, installs, updates and option changes. A quiet
+hour of checks is one line, so the log holds about a week. It never holds the
+username, tokens, post text, or who and what is watched. "Report a problem" in the
+popup (or on the Help page) opens ghostedwatch.com/feedback.html with the version,
+a status summary and the log in the link's `#fragment`, which never goes to the
+server; nothing is sent until the person presses Send (`report.ts`). There they can
+send it privately (stored by the site and filed as an issue in a private repo) or
+post it as a public issue here, from `.github/ISSUE_TEMPLATE/problem.yml`, with the
+item ids hidden.
+
 The extension only ever reads your own session's normal endpoints and stores text
 you authored — **no undocumented content-recovery endpoint**. Default poll interval
 is 1 minute (one bulk request per check).
@@ -72,7 +84,8 @@ is 1 minute (one bulk request per check).
 See `src/background.ts` (service-worker orchestration), `src/src/poller.ts` (the
 detection cycle), `monitoring.ts` (removal transition logic + recording),
 `win-api.ts` (id↔uuid encoding, profile normalization, public-view classifier),
-`content.ts` / `inject.ts` (session + post capture, highlighting), and `storage.ts`.
+`content.ts` / `inject.ts` (session + post capture, highlighting), `diaglog.ts` /
+`report.ts` (the log and problem reports), and `storage.ts`.
 
 ## Develop
 

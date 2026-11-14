@@ -522,6 +522,24 @@ a:hover {
     color: var(--ink-dim);
 }
 
+/* "Report a problem" (report.ts) under the nav */
+.gw-foot {
+    padding: 0 6px 6px;
+    text-align: center;
+}
+.gw-report {
+    border: none;
+    background: none;
+    padding: 2px 6px;
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    cursor: pointer;
+}
+.gw-report:hover {
+    color: var(--ink);
+    text-decoration: underline;
+}
 .gw-nav {
     display: flex;
     gap: 2px;
