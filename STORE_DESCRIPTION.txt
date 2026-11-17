@@ -22,6 +22,9 @@ Features:
 Made in America 🇺🇸 · Independent and private by design.
 
 VERSION HISTORY:
+0.0.7
+On Firefox, Report a problem now asks before filling in the extension's details.
+
 0.0.6
 Older removals are caught, alerts open the item, and the popup can report a problem.
 
