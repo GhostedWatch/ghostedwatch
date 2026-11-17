@@ -32,7 +32,7 @@ interface Check {
 let check: Check | null = null
 let between: Record<string, number> = {}
 
-// "11-14 10:05", in UTC, as the report's header says
+// "11-14 10:05", in UTC, which the feedback form tells the reader above the log
 export const stamp = (t: number): string => new Date(t).toISOString().slice(5, 16).replace('T', ' ')
 // 'content/profile.json?user=…' → 'profile': no query, so no username or ids
 export const endpointOf = (path: string): string => (path.split('?')[0].split('/').pop() || '').replace(/\.json$/, '')

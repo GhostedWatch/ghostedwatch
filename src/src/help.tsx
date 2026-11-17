@@ -2,7 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { APP_NAME } from './constants'
 import { EyeMark } from './Ghost'
-import { openReport } from './report'
+import { reportProblem } from './report'
 
 const SITE = 'https://ghostedwatch.com/'
 
@@ -189,7 +189,7 @@ function Help() {
                         href={`${SITE}feedback.html`}
                         onClick={e => {
                             e.preventDefault()
-                            openReport()
+                            reportProblem()
                         }}
                     >
                         Report a problem or send feedback

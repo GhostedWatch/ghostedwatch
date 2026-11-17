@@ -72,10 +72,14 @@ hour of checks is one line, so the log holds about a week. It never holds the
 username, tokens, post text, or who and what is watched. "Report a problem" in the
 popup (or on the Help page) opens ghostedwatch.com/feedback.html with the version,
 a status summary and the log in the link's `#fragment`, which never goes to the
-server; nothing is sent until the person presses Send (`report.ts`). There they can
-send it privately (stored by the site and filed as an issue in a private repo) or
-post it as a public issue here, from `.github/ISSUE_TEMPLATE/problem.yml`, with the
-item ids hidden.
+server; nothing is sent until the person presses Send (`report.ts`). On Firefox
+these details are Mozilla's "technical and interaction data", declared optional in
+the manifest: on Firefox 140 and later the click asks Firefox for it first
+(`permissions.request`), and a no opens the form without them. Firefox 109 to 139
+have no such setting, so the details go. On the form the person can send the report
+privately (stored by the site and filed as an issue in a private repo) or post it as
+a public issue here, from `.github/ISSUE_TEMPLATE/problem.yml`, with the item ids
+hidden.
 
 The extension only ever reads your own session's normal endpoints and stores text
 you authored — **no undocumented content-recovery endpoint**. Default poll interval

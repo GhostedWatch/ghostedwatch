@@ -52,6 +52,9 @@ function transformManifest(buffer) {
         manifest.permissions = manifest.permissions.concat(manifest.host_permissions || [])
         delete manifest.host_permissions
         manifest.manifest_version = 2
+        // Firefox's data settings: none required. A problem report's details (version,
+        // browser, status, log) are technical data, so they're optional, and Report a
+        // problem asks Firefox for them first (report.ts reportProblem).
         manifest.browser_specific_settings = { gecko: { id: 'ghostedwatch@reveddit.com', strict_min_version: '109.0', data_collection_permissions: { required: ['none'], optional: ['technicalAndInteraction'] } } }
         manifest.background.scripts = [manifest.background.service_worker]
         manifest.background.persistent = true

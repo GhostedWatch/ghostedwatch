@@ -1,8 +1,9 @@
 // "Report a problem": the feedback form on ghostedwatch.com, opened with the version,
 // a status summary and the diagnostic log (diaglog.ts) filled in. They travel in the
 // link's #fragment, which the browser never sends to the server, so nothing leaves the
-// machine until the person presses Send there. The form can also post the report as a
-// public GitHub issue. It can hide the item ids, and always does in a public one.
+// machine until the person presses Send there. On Firefox they come along only when it
+// allows them (detailsAllowed). The form can also post the report as a public GitHub
+// issue. It can hide the item ids, and always does in a public one.
 //
 // What goes in never names the account: no username, tokens, post text, or the names of
 // the people and communities watched.
@@ -139,6 +140,35 @@ export function reportUrl(d: ReportDetails): string {
     return `${FEEDBACK_URL}#r=${btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
 }
 
-export async function openReport(): Promise<void> {
-    await api.tabs.create({ url: reportUrl(await buildReportDetails()) })
+// The form, with the details in its link, or bare when the browser's setting keeps them.
+export async function openReport(withDetails = true): Promise<void> {
+    await api.tabs.create({ url: withDetails ? reportUrl(await buildReportDetails()) : FEEDBACK_URL })
+}
+
+// Firefox's permissions.request, with the data_collection key that chrome's types lack
+export interface DataCollectionPermissions {
+    request(permissions: { data_collection: string[] }): Promise<boolean>
+}
+
+// Whether Firefox lets a report's details go. Firefox asks people about "technical and
+// interaction data" (the manifest's optional data_collection), and the details are that,
+// so they go only with a yes. Once it has a yes, Firefox answers without asking; after a
+// no it asks again on the next click. A Firefox from before that setting (109 to 139)
+// refuses the data_collection key: it has nothing to ask, so the details go, and the form
+// shows all of them and sends nothing until the person does.
+export async function detailsAllowed(permissions: DataCollectionPermissions): Promise<boolean> {
+    try {
+        return (await permissions.request({ data_collection: ['technicalAndInteraction'] })) === true
+    } catch (e) {
+        return /data_collection/.test(String((e as Error)?.message || e))
+    }
+}
+
+// "Report a problem" in the popup and on the Help page. Call it first in the click: Firefox
+// asks only while the click still counts as the person's own action, so the request goes
+// out before anything here waits.
+export async function reportProblem(): Promise<void> {
+    const details =
+        __BUILT_FOR__ === 'firefox' ? await detailsAllowed(api.permissions as unknown as DataCollectionPermissions) : true
+    await openReport(details)
 }

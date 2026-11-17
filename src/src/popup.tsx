@@ -7,7 +7,7 @@ import { winDomainOf, HOME_COMMUNITY } from './constants'
 import api from './api'
 import { prettyAgo } from './time'
 import { EyeMark } from './Ghost'
-import { openReport } from './report'
+import { reportProblem } from './report'
 
 // Parse the active .win tab's URL into a watchable user or community feed, if any.
 type Page = { kind: 'user' | 'feed'; name: string }
@@ -251,7 +251,7 @@ function Popup() {
                 ))}
             </div>
             <div className="gw-foot">
-                <button className="gw-report" onClick={() => openReport().then(() => window.close())}>
+                <button className="gw-report" onClick={() => reportProblem().then(() => window.close())}>
                     Report a problem
                 </button>
             </div>
