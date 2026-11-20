@@ -56,7 +56,7 @@ async function uploadAndPublish(commit) {
     console.log(c.green(`✔ Upload ${up.uploadState || 'accepted'}`))
 
     console.log('\n' + c.yellow('[2/3] Store listing description...'))
-    const description = readDescription()
+    let description = readDescription()
     console.log('The CWS API cannot update listing text — paste it in the dashboard.')
     if (isInteractive()) {
         if (description) copyToClipboard(description, 'Description')
@@ -64,7 +64,18 @@ async function uploadAndPublish(commit) {
         const url = `https://chrome.google.com/webstore/devconsole/${dash}${id}/edit`
         console.log(c.magenta('📋 Dashboard: ') + url)
         openUrl(url)
-        await prompt('\n' + c.bold('Press ENTER once the listing description is verified/updated > '))
+        // The publish below submits the draft, so a listing edited but not saved is left
+        // out, and one submitted from the dashboard locks the item until its review ends
+        console.log('Paste it there and click Save draft, not Submit for review: the next step submits the upload and the saved listing together.')
+        for (;;) {
+            await prompt('\n' + c.bold('Press ENTER once the listing is saved > '))
+            // Edited while you were in the dashboard (a reworded note, say)
+            const now = readDescription()
+            if (now === description) break
+            console.log(c.yellow('STORE_DESCRIPTION.txt changed since it was copied.'))
+            if (now) copyToClipboard(now, 'The new description')
+            description = now
+        }
     } else {
         console.log(c.yellow('⚠ Non-interactive run: verify the listing description in the dashboard after this publish.'))
     }
@@ -74,7 +85,7 @@ async function uploadAndPublish(commit) {
         method: 'POST', headers: headers(token),
     })).json()
     if (pub.status?.[0] === 'OK') {
-        console.log(c.green('✔ Published! (goes live once review clears)'))
+        console.log(c.green("✔ Submitted for review. It goes live once the review clears; until then the dashboard won't take another submission."))
         markPublished('chrome', commit)
     } else {
         console.error(c.red('Publish failed or returned warnings:'), JSON.stringify(pub))
