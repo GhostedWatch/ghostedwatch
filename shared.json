@@ -1,0 +1,15 @@
+{
+  "modules": {
+    "publish": {
+      "stores": ["chrome", "firefox"],
+      "showsReleaseNotes": false,
+      "notesGlobal": "__CHANGELOG__",
+      "versionLine": "version",
+      "checks": [{ "script": "preflight", "remember": false }],
+      "notBuildInputs": [
+        "tests", "scripts", "src/*__tests__*", "*.md", ".github", ".gitignore", ".env.example", "LICENSE",
+        "playwright.config.js", "vitest.config.ts", "shared.json", "shared.lock.json"
+      ]
+    }
+  }
+}

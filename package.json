@@ -27,7 +27,8 @@
     "publish:chrome": "yarn preflight && node scripts/publishing/publish-chrome.mjs",
     "publish:firefox": "yarn preflight && node scripts/publishing/publish-firefox.mjs",
     "publish:firefox:text": "node scripts/publishing/publish-firefox.mjs --text-only",
-    "publish:all": "node scripts/publishing/publish-all.mjs"
+    "publish:all": "node scripts/publishing/publish-all.mjs",
+    "publish:log": "node scripts/publishing/publish-log.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",

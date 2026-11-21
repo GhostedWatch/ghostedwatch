@@ -161,6 +161,7 @@ yarn publish:firefox       # AMO: fresh prod build → source.zip (git archive o
                            #   has the version, without waiting for approval) →
                            #   updates the store description through the AMO API.
 yarn publish:firefox:text  # only push STORE_DESCRIPTION.txt to the AMO listing
+yarn publish:log           # what went to which store, when, and what failed
 ```
 
 `preflight` (run by every publish command) is typecheck + unit tests + Chromium
@@ -185,6 +186,12 @@ Firefox's source zip (the commit) is what was built.
 If a Firefox run stopped after AMO took the version, the rerun's "already exists"
 counts as published when every earlier submission of that version was this code;
 `PUBLISH_FIREFOX_ACCEPT_EXISTING=1` accepts it otherwise.
+Every run is appended to `.publish-log.jsonl` (gitignored), which `yarn publish:log`
+prints.
+
+The publish scripts (`scripts/publishing/`, `scripts/lib/env.mjs`) are synced
+copies, with this extension's settings in `shared.json`. A test fails if one is
+edited here.
 
 Dev builds go to `dist-*-dev/`, prod to `dist-*/` — and the publish scripts each
 rebuild their production artifact right before uploading, so nothing stale (or

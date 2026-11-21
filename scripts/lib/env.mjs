@@ -1,4 +1,6 @@
-// Tiny .env support (no dotenv dependency). Shared by the test + publish scripts.
+// Synced from the shared source (see shared.json): change it there, not here.
+//
+// Tiny .env support, with no dotenv dependency.
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -22,7 +24,7 @@ export function loadDotEnv() {
     }
 }
 
-// Set or replace one KEY=value line in .env (used by the token refresh flow).
+// Set or replace one KEY=value line in .env (the Chrome token refresh uses it).
 export function saveEnvVar(key, value) {
     let text = ''
     try {

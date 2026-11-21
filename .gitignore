@@ -15,3 +15,4 @@ playwright-report/
 web-ext-artifacts/
 .claude-mcp/
 .publish-status.json
+.publish-log.jsonl
