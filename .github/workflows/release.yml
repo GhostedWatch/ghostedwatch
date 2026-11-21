@@ -16,7 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-      - run: corepack enable
+      # Node 26 has no Corepack. The runner's own yarn hands each command to the
+      # Yarn this repo vendors (yarnPath in .yarnrc.yml).
       - run: yarn install --immutable
 
       - name: Verify the tag matches manifest.version

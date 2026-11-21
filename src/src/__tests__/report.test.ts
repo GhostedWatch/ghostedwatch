@@ -25,9 +25,14 @@ const chromeAsks = vi.fn()
 const firefoxAsks = vi.fn()
 ;(globalThis as any).chrome = { ...shared, permissions: { request: chromeAsks } }
 ;(globalThis as any).browser = { ...shared, permissions: { request: firefoxAsks } }
-;(globalThis as any).navigator = {
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
-}
+// Node has a navigator of its own, which can't be assigned to. Defined, not
+// stubbed, so the vi.unstubAllGlobals() after each test leaves it.
+Object.defineProperty(globalThis, 'navigator', {
+    value: {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+    },
+    configurable: true,
+})
 
 import {
     browserName,
